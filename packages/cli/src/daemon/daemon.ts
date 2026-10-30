@@ -79,15 +79,16 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     }
   };
   const scheduleCacheSave = (): void => {
-    if (cacheTimer) return;
+    if (cacheTimer || stopping) return;
     cacheTimer = setTimeout(() => {
       cacheTimer = undefined;
       saveCache();
     }, options.cacheSaveMs ?? 5000);
   };
 
+  // Note: stop() drains the queue before `stopping` is assigned (its body runs synchronously up to the first await).
   const onFlush = (batch: ChangeBatch): void => {
-    if (!project) return;
+    if (!project || stopping) return;
     const known = new Set([...Object.keys(project.facts), ...project.skipped]);
     try {
       const result = applyFileChanges(project, batch.paths);
@@ -109,6 +110,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
         });
       }
     } catch (err) {
+      changedSinceReconcile = true; // let the drift check recover a failed batch
       log(`update failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     }
   };
@@ -116,11 +118,13 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
 
   const loaded = (async () => {
     await new Promise<void>((resolve) => setImmediate(resolve));
+    if (stopping) return;
     const started = Date.now();
     project = loadProject(root, readFactsCache(root));
     saveCache();
     log(`loaded ${Object.keys(project.facts).length} files in ${Date.now() - started} ms`);
   })();
+  loaded.catch(() => {}); // `ready` reports load failures; this avoids an unhandled rejection if startServer fails first
   const currentFindingIds = (): string[] => project?.graph.findings.map((f) => f.id) ?? [];
   const graphNow = async (): Promise<PublicGraph> => {
     await loaded;
@@ -141,12 +145,15 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       seq,
     }),
     graph: graphNow,
+    // No missed delta: there is no await between this graph snapshot and the server's clients.add (only microtasks),
+    // and deltas are broadcast only from macrotasks. Adding an await here would break that guarantee.
     hello: async () => {
       const graph = await graphNow();
       return { type: 'graph', seq, graph };
     },
     touched: async ({ files, sessionId }) => {
       await loaded;
+      if (stopping) return;
       const rels = files.map((f) => toProjectRel(root, f)).filter((r): r is string => r !== null);
       turns.touch(sessionId ?? 'default', rels, currentFindingIds());
       for (const rel of rels) queue.add(rel, 'claude');
@@ -201,9 +208,14 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
 
   timers.push(
     setInterval(() => {
-      if (!project || !changedSinceReconcile) return;
+      if (!project || !changedSinceReconcile || stopping) return;
       changedSinceReconcile = false;
-      for (const rel of findDrift(project)) queue.add(rel, 'watcher');
+      try {
+        for (const rel of findDrift(project)) queue.add(rel, 'watcher');
+      } catch (err) {
+        changedSinceReconcile = true; // retry on the next tick
+        log(`drift check failed: ${String(err)}`);
+      }
     }, options.reconcileMs ?? 60_000),
   );
   timers.push(
@@ -222,16 +234,21 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
   function stop(reason = 'stop'): Promise<void> {
     if (stopping) return stopping;
     stopping = (async () => {
-      log(`stopping: ${reason}`);
-      for (const t of timers) clearInterval(t);
-      if (cacheTimer) clearTimeout(cacheTimer);
-      queue.flushNow();
-      queue.dispose();
-      await watcher?.close();
-      await server.close();
-      saveCache();
-      removeDaemonInfo(root, process.pid);
-      resolveDone(reason);
+      try {
+        log(`stopping: ${reason}`);
+        for (const t of timers) clearInterval(t);
+        if (cacheTimer) clearTimeout(cacheTimer);
+        queue.flushNow();
+        queue.dispose();
+        await watcher?.close();
+        await server.close();
+        saveCache();
+        removeDaemonInfo(root, process.pid);
+      } catch (err) {
+        log(`shutdown error: ${String(err)}`);
+      } finally {
+        resolveDone(reason);
+      }
     })();
     return stopping;
   }

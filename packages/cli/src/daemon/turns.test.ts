@@ -51,4 +51,30 @@ describe('TurnTracker', () => {
     expect(t.newFindings(first, [f('x', [])])).toEqual([]);
     expect(t.currentTurn('s')).toBeDefined();
   });
+
+  it('evicts per session, so a busy session cannot push out another session turn', () => {
+    const t = new TurnTracker();
+    const quiet = t.startTurn('quiet', []);
+    for (let i = 0; i < 150; i++) t.startTurn('busy', []);
+    expect(t.hasTurn(quiet)).toBe(true);
+    expect(t.currentTurn('quiet')).toBe(quiet);
+    expect(t.newFindings(quiet, [f('x', [])]).map((x) => x.id)).toEqual(['x']);
+  });
+
+  it('keeps at most 20 turns per session', () => {
+    const t = new TurnTracker();
+    const ids = Array.from({ length: 21 }, () => t.startTurn('s', []));
+    expect(t.hasTurn(ids[0])).toBe(false);
+    expect(ids.slice(1).every((id) => t.hasTurn(id))).toBe(true);
+    expect(t.currentTurn('s')).toBe(ids[20]);
+  });
+
+  it('caps all turns at 1000 and forgets the current turn of an evicted session', () => {
+    const t = new TurnTracker();
+    const first = t.startTurn('s0', []);
+    for (let i = 1; i <= 1000; i++) t.startTurn(`s${i}`, []);
+    expect(t.hasTurn(first)).toBe(false);
+    expect(t.currentTurn('s0')).toBeUndefined();
+    expect(t.currentTurn('s1000')).toBeDefined();
+  });
 });

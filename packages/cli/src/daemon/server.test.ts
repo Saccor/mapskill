@@ -23,9 +23,10 @@ function fakeDeps(over: Partial<ServerDeps> = {}) {
       calls.touched.push(input);
     },
     startTurn: async () => 'turn-1',
-    findings: async (turnId, query) => {
-      calls.findings.push({ turnId, query });
-      return [];
+    findings: async (query) => {
+      calls.findings.push(query);
+      const turnId = query.since ?? (query.session === 's1' ? 'turn-1' : undefined);
+      return { findings: [], turnId, unknownTurn: turnId !== 'turn-1' };
     },
     shutdown: () => {
       calls.shutdown++;
@@ -82,9 +83,27 @@ describe('HTTP API', () => {
     expect(await request(info, 'GET', '/api/status')).toMatchObject({ ok: true, ready: true });
     expect(await request(info, 'GET', '/api/graph')).toEqual(emptyGraph);
     expect(await request(info, 'POST', '/api/turn', { sessionId: 's1' })).toEqual({ turnId: 'turn-1' });
-    expect(await request(info, 'GET', '/api/findings?since=turn-1&touchedOnly=true&certainty=certain')).toEqual({ findings: [] });
-    expect(calls.findings).toEqual([{ turnId: 'turn-1', query: { touchedOnly: true, certainty: 'certain' } }]);
+    expect(await request(info, 'GET', '/api/findings?since=turn-1&touchedOnly=true&certainty=certain')).toEqual({
+      findings: [],
+      turnId: 'turn-1',
+      unknownTurn: false,
+    });
+    expect(calls.findings).toEqual([{ since: 'turn-1', touchedOnly: true, certainty: 'certain' }]);
     expect(calls.activity).toBe(4); // one per authenticated request
+  });
+
+  it('answers findings for a session and flags unknown turns', async () => {
+    const { deps, calls } = fakeDeps();
+    server = await startServer(deps);
+    const info = { port: server.port, token: TOKEN };
+    expect(await request(info, 'GET', '/api/findings?session=s1')).toEqual({ findings: [], turnId: 'turn-1', unknownTurn: false });
+    expect(await request(info, 'GET', '/api/findings?session=nobody')).toEqual({ findings: [], unknownTurn: true });
+    expect(await request(info, 'GET', '/api/findings?since=gone')).toEqual({ findings: [], turnId: 'gone', unknownTurn: true });
+    expect(calls.findings).toEqual([
+      { session: 's1', touchedOnly: false },
+      { session: 'nobody', touchedOnly: false },
+      { since: 'gone', touchedOnly: false },
+    ]);
   });
 
   it('passes touched files on', async () => {
@@ -101,6 +120,7 @@ describe('HTTP API', () => {
     const status = (p: Promise<unknown>) => p.then(() => 200, (e: DaemonRequestError) => e.status);
     expect(await status(request(info, 'POST', '/api/touched', { files: 'a.ts' }))).toBe(400);
     expect(await status(request(info, 'GET', '/api/findings'))).toBe(400);
+    expect(await status(request(info, 'GET', '/api/findings?session=&since='))).toBe(400);
     expect(await status(request(info, 'GET', '/api/findings?since=t&certainty=maybe'))).toBe(400);
     expect(await status(request(info, 'GET', '/api/nope'))).toBe(404);
   });

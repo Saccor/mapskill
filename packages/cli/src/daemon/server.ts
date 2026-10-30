@@ -4,6 +4,19 @@ import type { AddressInfo } from 'node:net';
 import type { Certainty, ClientMessage, DaemonStatus, Finding, PublicGraph, ServerMessage } from '@mapskill/core';
 import { WebSocket, WebSocketServer } from 'ws';
 
+export interface FindingsQuery {
+  since?: string;
+  session?: string;
+  touchedOnly: boolean;
+  certainty?: Certainty;
+}
+
+export interface FindingsAnswer {
+  findings: Finding[];
+  turnId?: string;
+  unknownTurn: boolean;
+}
+
 export interface ServerDeps {
   token: string;
   status(): DaemonStatus;
@@ -12,7 +25,11 @@ export interface ServerDeps {
   hello(): Promise<ServerMessage>;
   touched(input: { files: string[]; toolUseId?: string; sessionId?: string }): Promise<void>;
   startTurn(sessionId: string): Promise<string>;
-  findings(turnId: string, query: { touchedOnly: boolean; certainty?: Certainty }): Promise<Finding[]>;
+  /**
+   * New findings for a turn, given by id (`since`) or as the current turn of a session (`session`); `since` wins when
+   * both are given. `unknownTurn` is true (and `findings` empty) when the turn is not known or the session has none.
+   */
+  findings(query: FindingsQuery): Promise<FindingsAnswer>;
   shutdown(): void;
   /** Called for every authenticated request or message (keeps the daemon from idling out). */
   activity(): void;
@@ -99,14 +116,16 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
       }
       case 'GET /api/findings': {
         const since = url.searchParams.get('since');
-        if (!since) throw new HttpError(400, 'since is required');
+        const session = url.searchParams.get('session');
+        if (!since && !session) throw new HttpError(400, 'since or session is required');
         const certainty = url.searchParams.get('certainty');
         if (certainty !== null && certainty !== 'certain' && certainty !== 'likely') throw new HttpError(400, 'certainty must be certain or likely');
-        const findings = await deps.findings(since, {
+        const answer = await deps.findings({
+          ...(since ? { since } : { session: session! }),
           touchedOnly: url.searchParams.get('touchedOnly') === 'true',
           ...(certainty ? { certainty } : {}),
         });
-        return send(res, 200, { findings });
+        return send(res, 200, answer);
       }
       case 'POST /api/shutdown':
         send(res, 200, { ok: true });

@@ -184,10 +184,12 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       queue.flushNow();
       return turns.startTurn(sessionId, currentFindingIds());
     },
-    findings: async (turnId, query) => {
+    findings: async ({ since, session, ...query }) => {
       await loaded;
       queue.flushNow();
-      return turns.newFindings(turnId, project!.graph.findings, query);
+      const turnId = since ?? (session === undefined ? undefined : turns.currentTurn(session));
+      if (turnId === undefined || !turns.hasTurn(turnId)) return { findings: [], turnId, unknownTurn: true };
+      return { findings: turns.newFindings(turnId, project!.graph.findings, query), turnId, unknownTurn: false };
     },
     shutdown: () => {
       void stop('shutdown request');

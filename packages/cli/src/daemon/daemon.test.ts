@@ -112,6 +112,25 @@ describe('startDaemon', () => {
     expect(none.findings).toEqual([]);
   });
 
+  it('answers findings by session (the Stop hook contract) and flags unknown turns', async () => {
+    const root = tmpProject(files());
+    const h = await start(root, { watch: false });
+    const { turnId } = await request<{ turnId: string }>(h.info, 'POST', '/api/turn', { sessionId: 's1' });
+    write(root, 'lib/b.ts', fn('sumB'));
+    await request(h.info, 'POST', '/api/touched', { files: [path.join(root, 'lib/b.ts')], sessionId: 's1' });
+    type Answer = { findings: Finding[]; turnId?: string; unknownTurn: boolean };
+    const bySession = await request<Answer>(h.info, 'GET', '/api/findings?session=s1&touchedOnly=true&certainty=certain');
+    expect(bySession.turnId).toBe(turnId);
+    expect(bySession.unknownTurn).toBe(false);
+    expect(bySession.findings.some((f) => f.kind.endsWith('-duplicate') && f.files.includes('lib/b.ts'))).toBe(true);
+    expect(await request<Answer>(h.info, 'GET', '/api/findings?session=never-seen')).toEqual({ findings: [], unknownTurn: true });
+    expect(await request<Answer>(h.info, 'GET', '/api/findings?since=no-such-turn')).toEqual({
+      findings: [],
+      turnId: 'no-such-turn',
+      unknownTurn: true,
+    });
+  });
+
   it('removes the nodes of a deleted folder', async () => {
     const root = tmpProject({ ...files(), 'lib/b.ts': fn('sumB') });
     const h = await start(root);

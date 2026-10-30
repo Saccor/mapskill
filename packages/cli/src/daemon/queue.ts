@@ -35,7 +35,8 @@ export class ChangeQueue {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
     if (this.pending.size === 0) return;
-    const entries = [...this.pending].sort(([a], [b]) => a.localeCompare(b));
+    // Code-unit order, like the rest of the engine: independent of the machine's locale.
+    const entries = [...this.pending].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     this.pending.clear();
     this.onFlush({
       paths: entries.map(([p]) => p),

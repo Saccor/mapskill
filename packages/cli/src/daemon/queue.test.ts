@@ -20,6 +20,13 @@ describe('ChangeQueue', () => {
     expect(batches).toEqual([{ paths: ['a.ts', 'b.ts'], byClaude: [] }]);
   });
 
+  it('sorts paths by code unit, independent of locale', () => {
+    const q = new ChangeQueue((b) => batches.push(b), 200);
+    for (const p of ['b.ts', 'a.ts', 'B.ts', 'Z/x.ts', '_x.ts']) q.add(p, 'watcher');
+    q.flushNow();
+    expect(batches[0].paths).toEqual(['B.ts', 'Z/x.ts', '_x.ts', 'a.ts', 'b.ts']);
+  });
+
   it('flushes after maxWait even while changes keep coming', () => {
     const q = new ChangeQueue((b) => batches.push(b), 200, 1000);
     for (let i = 0; i < 20; i++) {

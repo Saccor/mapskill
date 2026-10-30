@@ -1,4 +1,7 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { tmpProject } from '@mapskill/core/test-helpers';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runStatus, runStop } from '../commands';
@@ -66,6 +69,21 @@ describe('ensureDaemon fail-open', () => {
     const root = newProject();
     const broken = (r: string): void => spawnDaemon(r, { command: 'mapskill-no-such-command', args: [] });
     expect(await ensureDaemon(root, { timeoutMs: 500, spawn: broken })).toBeNull();
+    const logFile = path.join(root, '.mapskill', 'daemon.log');
+    await waitFor(() => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes('mapskill-no-such-command'), 5000);
+    expect(fs.readFileSync(logFile, 'utf8')).toMatch(/ENOENT/);
+  }, 15_000);
+});
+
+describe('spawnDaemon', () => {
+  it('runs the daemon from the home folder, so it does not pin the project folder', async () => {
+    const root = newProject();
+    const script = 'console.log("cwd=" + process.cwd())';
+    spawnDaemon(root, { command: process.execPath, args: ['-e', script] });
+    const logFile = path.join(root, '.mapskill', 'daemon.log');
+    await waitFor(() => fs.readFileSync(logFile, 'utf8').includes('cwd='), 10_000);
+    const line = fs.readFileSync(logFile, 'utf8').split(/\r?\n/).find((l) => l.startsWith('cwd='));
+    expect(line).toBe(`cwd=${os.homedir()}`);
   });
 });
 

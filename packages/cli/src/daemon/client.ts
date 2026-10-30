@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { DaemonStatus } from '@mapskill/core';
@@ -89,13 +90,21 @@ export function spawnDaemon(root: string, override?: { command: string; args: st
   try {
     const { command, args } = override ?? selfCommand();
     const child = spawn(command, [...args, 'daemon', root], {
-      cwd: root,
+      // Not the project folder: on Windows a process's cwd keeps the folder from being renamed or deleted.
+      // The root is passed as an absolute argument, so the daemon does not need it.
+      cwd: os.homedir(),
       detached: true,
       stdio: ['ignore', log, log],
       windowsHide: true,
     });
     // Async spawn failures (ENOENT, EACCES) arrive as 'error' events; unhandled they would crash the caller.
-    child.on('error', () => {});
+    child.on('error', (err) => {
+      try {
+        fs.appendFileSync(logFile, `${new Date().toISOString()} could not start the daemon: ${err.message}\n`);
+      } catch {
+        // logging is best effort
+      }
+    });
     child.unref();
   } finally {
     fs.closeSync(log);

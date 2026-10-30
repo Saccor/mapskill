@@ -18,7 +18,7 @@ export function makeFinding(
   instruction: string,
   key = '',
 ): Finding {
-  const ids = [...new Set(nodeIds.filter((x): x is string => Boolean(x)))];
+  const ids = [...new Set(nodeIds.filter((x): x is string => Boolean(x)))].sort();
   const sortedFiles = [...new Set(files)].sort();
   const id = `${kind}:${sha1([...sortedFiles, ...ids, key].join('|')).slice(0, 12)}`;
   return { id, kind, certainty, nodeIds: ids, files: sortedFiles, message, instruction };

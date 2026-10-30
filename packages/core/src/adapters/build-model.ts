@@ -117,9 +117,31 @@ export function buildModel(input: ModelInput): Model {
     const primary = owner(f.path);
     return primary ? [primary] : [];
   };
-  const exportNode = (target: string, name: string): string | undefined => {
-    const fn = input.files[target]?.functions.find((x) => x.exportName === name);
-    return owner(target, fn?.name);
+  const exportNode = (target: string, name: string, visited = new Set<string>()): string | undefined => {
+    const key = `${target}#${name}`;
+    if (visited.has(key)) return undefined;
+    visited.add(key);
+    const facts = input.files[target];
+    const fn = facts?.functions.find((x) => x.exportName === name);
+    if (fn) return owner(target, fn.name);
+    if (facts) {
+      for (const imp of facts.imports) {
+        const binding = imp.bindings.find((x) => x.local === name && x.imported !== '*');
+        if (!binding) continue;
+        const next = input.resolve(imp.specifier, target);
+        const hit = next ? exportNode(next, binding.imported, visited) : undefined;
+        if (hit) return hit;
+      }
+      for (const imp of facts.imports) {
+        if (!imp.bindings.some((x) => x.imported === '*' && x.local === '*')) continue;
+        const next = input.resolve(imp.specifier, target);
+        const hit = next ? exportNode(next, name, visited) : undefined;
+        if (hit) return hit;
+      }
+    }
+    const list = byFile.get(target) ?? [];
+    const only = list.length === 1 ? byId.get(list[0]) : undefined;
+    return only && only.startLine === undefined ? only.id : undefined;
   };
 
   for (const f of Object.values(input.files)) {

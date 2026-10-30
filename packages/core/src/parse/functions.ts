@@ -27,8 +27,9 @@ export function functionMetrics(sf: ts.SourceFile, name: string, node: FnNode, e
   for (const p of node.parameters) leafTokens(p, sf, tokens);
   if (node.body) leafTokens(node.body, sf, tokens);
   const exact = tokens.map((t) => t.getText(sf));
+  const bound = boundNames(node);
   const renamed = tokens.map((t) =>
-    t.kind === ts.SyntaxKind.Identifier || t.kind === ts.SyntaxKind.PrivateIdentifier
+    t.kind === ts.SyntaxKind.Identifier && bound.has(t.getText(sf)) && !isPropertyName(t as ts.Identifier)
       ? 'ID'
       : LITERAL_KINDS.has(t.kind)
         ? 'LIT'
@@ -50,6 +51,35 @@ export function functionMetrics(sf: ts.SourceFile, name: string, node: FnNode, e
     maxNesting,
     refs: body ? collectRefs(body) : [],
   };
+}
+
+/** Names declared inside the function: parameters (incl. destructuring), variables, nested functions/classes and catch variables. */
+function boundNames(node: FnNode): Set<string> {
+  const out = new Set<string>();
+  const addPattern = (n: ts.BindingName): void => {
+    if (ts.isIdentifier(n)) out.add(n.text);
+    else for (const el of n.elements) if (ts.isBindingElement(el)) addPattern(el.name);
+  };
+  const visit = (x: ts.Node): void => {
+    if (ts.isParameter(x) || ts.isVariableDeclaration(x)) addPattern(x.name);
+    else if ((ts.isFunctionDeclaration(x) || ts.isClassDeclaration(x)) && x.name) out.add(x.name.text);
+    ts.forEachChild(x, visit);
+  };
+  for (const p of node.parameters) visit(p);
+  if (node.body) visit(node.body);
+  return out;
+}
+
+function isPropertyName(x: ts.Identifier): boolean {
+  const p = x.parent;
+  return (
+    (ts.isPropertyAccessExpression(p) && p.name === x) ||
+    (ts.isQualifiedName(p) && p.right === x) ||
+    (ts.isPropertyAssignment(p) && p.name === x) ||
+    (ts.isJsxAttribute(p) && p.name === x) ||
+    ((ts.isPropertySignature(p) || ts.isPropertyDeclaration(p) || ts.isMethodDeclaration(p) || ts.isMethodSignature(p) || ts.isEnumMember(p)) && p.name === x) ||
+    (ts.isBindingElement(p) && p.propertyName === x)
+  );
 }
 
 function leafTokens(node: ts.Node, sf: ts.SourceFile, out: ts.Node[]): void {

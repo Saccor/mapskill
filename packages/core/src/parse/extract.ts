@@ -34,10 +34,16 @@ function importFact(st: ts.ImportDeclaration, line: number): ImportFact {
   if (clause?.name) bindings.push({ imported: 'default', local: clause.name.text });
   const nb = clause?.namedBindings;
   if (nb && ts.isNamespaceImport(nb)) bindings.push({ imported: '*', local: nb.name.text });
+  const inlineTypeOnly =
+    !clause?.isTypeOnly && !clause?.name && !!nb && ts.isNamedImports(nb) && nb.elements.length > 0 && nb.elements.every((el) => el.isTypeOnly);
+  const typeOnly = !!clause?.isTypeOnly || inlineTypeOnly;
   if (nb && ts.isNamedImports(nb)) {
-    for (const el of nb.elements) bindings.push({ imported: (el.propertyName ?? el.name).text, local: el.name.text });
+    for (const el of nb.elements) {
+      if (!typeOnly && el.isTypeOnly) continue;
+      bindings.push({ imported: (el.propertyName ?? el.name).text, local: el.name.text });
+    }
   }
-  return { specifier: (st.moduleSpecifier as ts.StringLiteral).text, bindings, typeOnly: !!clause?.isTypeOnly, line };
+  return { specifier: (st.moduleSpecifier as ts.StringLiteral).text, bindings, typeOnly, line };
 }
 
 function handleExportDeclaration(
@@ -49,6 +55,7 @@ function handleExportDeclaration(
   const clause = st.exportClause;
   if (st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier)) {
     const bindings: ImportBinding[] = [];
+    let typeOnly = st.isTypeOnly;
     if (!clause) {
       bindings.push({ imported: '*', local: '*' });
       facts.exports.push({ name: '*', kind: 'reexport', line });
@@ -56,15 +63,17 @@ function handleExportDeclaration(
       bindings.push({ imported: '*', local: clause.name.text });
       facts.exports.push({ name: clause.name.text, kind: 'reexport', line });
     } else {
+      typeOnly = typeOnly || (clause.elements.length > 0 && clause.elements.every((el) => el.isTypeOnly));
       for (const el of clause.elements) {
-        bindings.push({ imported: (el.propertyName ?? el.name).text, local: el.name.text });
         facts.exports.push({ name: el.name.text, kind: 'reexport', line });
+        if (!typeOnly && el.isTypeOnly) continue;
+        bindings.push({ imported: (el.propertyName ?? el.name).text, local: el.name.text });
       }
     }
-    facts.imports.push({ specifier: st.moduleSpecifier.text, bindings, typeOnly: st.isTypeOnly, line });
+    facts.imports.push({ specifier: st.moduleSpecifier.text, bindings, typeOnly, line });
   } else if (clause && ts.isNamedExports(clause)) {
     for (const el of clause.elements) {
-      facts.exports.push({ name: el.name.text, kind: 'variable', line });
+      facts.exports.push({ name: el.name.text, kind: st.isTypeOnly || el.isTypeOnly ? 'type' : 'variable', line });
       exportedLocals.set((el.propertyName ?? el.name).text, el.name.text);
     }
   }
@@ -83,6 +92,7 @@ export function extractFacts(path: string, text: string, mtimeMs = 0): FileFacts
     functions: [],
     calls: [],
     problems: [],
+    fileRefs: [],
   };
   const diags = (sf as unknown as { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];
   if (diags.length > 0) facts.parseError = ts.flattenDiagnosticMessageText(diags[0].messageText, ' ');
@@ -130,5 +140,42 @@ export function extractFacts(path: string, text: string, mtimeMs = 0): FileFacts
     if (!fn.exportName && exportedLocals.has(fn.name)) fn.exportName = exportedLocals.get(fn.name);
   }
   collectCallsAndProblems(sf, facts);
+  facts.fileRefs = collectFileRefs(sf);
+  const seen = new Set<string>();
+  facts.exports = facts.exports.filter((x) => (seen.has(x.name) ? false : (seen.add(x.name), true)));
   return facts;
+}
+
+function isDeclarationName(x: ts.Identifier): boolean {
+  const p = x.parent;
+  return (
+    (ts.isVariableDeclaration(p) || ts.isParameter(p) || ts.isBindingElement(p) || ts.isFunctionDeclaration(p) || ts.isFunctionExpression(p) ||
+      ts.isClassDeclaration(p) || ts.isClassExpression(p) || ts.isInterfaceDeclaration(p) || ts.isTypeAliasDeclaration(p) ||
+      ts.isEnumDeclaration(p) || ts.isTypeParameterDeclaration(p) || ts.isModuleDeclaration(p)) &&
+    p.name === x
+  );
+}
+
+function isPropertyNamePosition(x: ts.Identifier): boolean {
+  const p = x.parent;
+  return (
+    (ts.isPropertyAccessExpression(p) && p.name === x) ||
+    (ts.isQualifiedName(p) && p.right === x) ||
+    (ts.isPropertyAssignment(p) && p.name === x) ||
+    (ts.isJsxAttribute(p) && p.name === x) ||
+    ((ts.isPropertySignature(p) || ts.isPropertyDeclaration(p) || ts.isMethodDeclaration(p) || ts.isMethodSignature(p) || ts.isEnumMember(p)) && p.name === x) ||
+    (ts.isBindingElement(p) && p.propertyName === x)
+  );
+}
+
+/** Identifiers referenced anywhere in the file, including type positions; excludes declaration names, import/export specifiers and property names. */
+function collectFileRefs(sf: ts.SourceFile): string[] {
+  const set = new Set<string>();
+  const visit = (x: ts.Node): void => {
+    if (ts.isImportDeclaration(x) || ts.isImportEqualsDeclaration(x) || ts.isExportSpecifier(x)) return;
+    if (ts.isIdentifier(x) && !isDeclarationName(x) && !isPropertyNamePosition(x)) set.add(x.text);
+    ts.forEachChild(x, visit);
+  };
+  visit(sf);
+  return [...set].sort();
 }

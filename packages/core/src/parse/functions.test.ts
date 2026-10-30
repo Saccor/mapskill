@@ -57,3 +57,21 @@ describe('functionMetrics', () => {
     expect(m.shingles.length).toBeGreaterThan(0);
   });
 });
+
+describe('renamedHash only renames bound identifiers', () => {
+  it('keeps property names and unbound identifiers verbatim', () => {
+    const a = metrics(`function f(x: number) { const r = db.post.findMany(x); return r; }`);
+    const b = metrics(`function g(p: number) { const q = db.comment.findMany(p); return q; }`);
+    const c = metrics(`function h(p: number) { const q = db.post.findMany(p); return q; }`);
+    expect(a.renamedHash).not.toBe(b.renamedHash);
+    expect(a.renamedHash).toBe(c.renamedHash);
+  });
+
+  it('keeps outer function calls verbatim and renames destructured params', () => {
+    const a = metrics(`function f({ a, b }: { a: number; b: number }) { try { return one(a + b); } catch (e) { return e; } }`);
+    const b = metrics(`function g({ a, b }: { a: number; b: number }) { try { return two(a + b); } catch (err) { return err; } }`);
+    const c = metrics(`function g({ a, b }: { a: number; b: number }) { try { return one(a + b); } catch (err) { return err; } }`);
+    expect(a.renamedHash).not.toBe(b.renamedHash);
+    expect(a.renamedHash).toBe(c.renamedHash);
+  });
+});

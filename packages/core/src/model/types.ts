@@ -67,6 +67,8 @@ export interface FileFacts {
   functions: FunctionFact[];
   calls: CallFact[];
   problems: ProblemFact[];
+  /** Identifiers referenced anywhere in the file (top level, bodies, type positions), excluding declaration names. Sorted, unique. */
+  fileRefs: string[];
   parseError?: string;
 }
 

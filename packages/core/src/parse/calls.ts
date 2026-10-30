@@ -14,6 +14,19 @@ const SECRET_PATTERNS = [
   /^eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}\./,
 ];
 
+function isSecret(text: string): boolean {
+  if (!SECRET_PATTERNS.some((r) => r.test(text))) return false;
+  if (text.startsWith('eyJ')) {
+    try {
+      const payload = JSON.parse(Buffer.from(text.split('.')[1], 'base64url').toString('utf8')) as { role?: unknown };
+      if (payload.role === 'anon') return false;
+    } catch {
+      /* not decodable: keep reporting */
+    }
+  }
+  return true;
+}
+
 function urlText(arg: ts.Expression): string | undefined {
   if (ts.isStringLiteralLike(arg)) return arg.text;
   if (ts.isTemplateExpression(arg)) return arg.head.text + arg.templateSpans.map((s) => '*' + s.literal.text).join('');
@@ -102,7 +115,7 @@ export function collectCallsAndProblems(sf: ts.SourceFile, facts: FileFacts): vo
     if (ts.isCatchClause(node) && swallows(node.block)) {
       facts.problems.push({ kind: 'swallowed-error', line: lineOf(node) });
     }
-    if (ts.isStringLiteralLike(node) && SECRET_PATTERNS.some((r) => r.test(node.text))) {
+    if (ts.isStringLiteralLike(node) && isSecret(node.text)) {
       facts.problems.push({ kind: 'hardcoded-secret', line: lineOf(node), detail: node.text.slice(0, 6) + '…' });
     }
     ts.forEachChild(node, visit);

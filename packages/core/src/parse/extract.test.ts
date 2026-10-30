@@ -47,3 +47,46 @@ export { local as renamed };
     expect(f.exports.some((e) => e.name === 'ok')).toBe(true);
   });
 });
+
+describe('extractFacts: file refs, type-only imports and exports', () => {
+  it('records fileRefs from top level and type positions, not declaration names', () => {
+    const f = extractFacts('lib/s.ts', `
+export const userSchema = make();
+export type User = Infer<typeof userSchema>;
+export const url = 'x';
+export const client = { url };
+export const lonely = 1;
+export function used() { return 1; }
+export default used;`);
+    expect(f.fileRefs).toContain('userSchema');
+    expect(f.fileRefs).toContain('url');
+    expect(f.fileRefs).toContain('used');
+    expect(f.fileRefs).not.toContain('lonely');
+    expect(f.fileRefs).not.toContain('client');
+  });
+
+  it('marks imports type-only when every named binding is inline-type', () => {
+    const f = extractFacts('a.ts', `
+import { type A } from './a';
+import { type B, C } from './b';
+import D, { type E } from './d';
+export { type F } from './f';
+export { type G, H } from './g';`);
+    expect(f.imports[0]).toMatchObject({ typeOnly: true, bindings: [{ imported: 'A', local: 'A' }] });
+    expect(f.imports[1]).toMatchObject({ typeOnly: false, bindings: [{ imported: 'C', local: 'C' }] });
+    expect(f.imports[2].typeOnly).toBe(false);
+    expect(f.imports[2].bindings.map((b) => b.imported)).toEqual(['default']);
+    expect(f.imports[3].typeOnly).toBe(true);
+    expect(f.imports[4]).toMatchObject({ typeOnly: false, bindings: [{ imported: 'H', local: 'H' }] });
+  });
+
+  it('records local type exports as kind type', () => {
+    const f = extractFacts('t.ts', `type L = {}; type X = {}; export type { L }; export { type X };`);
+    expect(f.exports.map((e) => `${e.name}:${e.kind}`)).toEqual(['L:type', 'X:type']);
+  });
+
+  it('dedupes overloaded exports by name', () => {
+    const f = extractFacts('o.ts', `export function fmt(a: string): string;\nexport function fmt(a: number): string;\nexport function fmt(a: any) { return String(a); }`);
+    expect(f.exports.filter((e) => e.name === 'fmt')).toHaveLength(1);
+  });
+});

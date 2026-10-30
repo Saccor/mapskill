@@ -41,3 +41,17 @@ export function c() { try { run(); } catch (e) { throw new Error('wrapped'); } }
     expect(f.problems[0].detail).toBe('sk_liv…');
   });
 });
+
+describe('hardcoded-secret JWTs', () => {
+  const jwt = (payload: object) =>
+    ['{"alg":"HS256","typ":"JWT"}', JSON.stringify(payload)]
+      .map((s) => Buffer.from(s).toString('base64url'))
+      .join('.') + '.abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+
+  it('ignores Supabase anon JWTs but reports other JWTs', () => {
+    const anon = extractFacts('a.ts', `const k = '${jwt({ role: 'anon', iss: 'supabase', ref: 'abcdefghijklmnop' })}';`);
+    expect(anon.problems).toEqual([]);
+    const service = extractFacts('b.ts', `const k = '${jwt({ role: 'service_role', iss: 'supabase', ref: 'abcdefghijklmnop' })}';`);
+    expect(service.problems.map((p) => p.kind)).toEqual(['hardcoded-secret']);
+  });
+});

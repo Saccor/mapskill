@@ -9,6 +9,8 @@ export interface Resolver {
   configError?: string;
   /** Prefixes of tsconfig `paths` keys (e.g. '@/'), used to recognise local-looking specifiers. */
   pathPrefixes: string[];
+  /** Forgets cached resolutions. Call after files were added or removed. */
+  clearCache(): void;
 }
 
 function withDefaults(o: ts.CompilerOptions): ts.CompilerOptions {
@@ -41,10 +43,14 @@ export function loadCompilerOptions(root: string): { options: ts.CompilerOptions
 export function createResolver(root: string): Resolver {
   const { options, error } = loadCompilerOptions(root);
   const pathPrefixes = Object.keys(options.paths ?? {}).map((k) => k.replace(/\*$/, '')).filter((k) => k.length > 0);
-  const cache = ts.createModuleResolutionCache(root, (f) => f, options);
+  const newCache = (): ts.ModuleResolutionCache => ts.createModuleResolutionCache(root, (f) => f, options);
+  let cache = newCache();
   return {
     configError: error,
     pathPrefixes,
+    clearCache() {
+      cache = newCache();
+    },
     resolve(specifier, fromFile) {
       const containing = path.join(root, fromFile);
       const resolved = ts.resolveModuleName(specifier, containing, options, ts.sys, cache).resolvedModule;

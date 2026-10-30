@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { scanProject, ZONE_LABELS, type Graph, type Zone } from '@mapskill/core';
+import { scanProject, toPublicGraph, ZONE_LABELS, type Graph, type Zone } from '@mapskill/core';
 
 export function runScan(argv: string[], write: (s: string) => void = (s) => process.stdout.write(s)): number {
   const { values, positionals } = parseArgs({
@@ -13,8 +13,7 @@ export function runScan(argv: string[], write: (s: string) => void = (s) => proc
   });
   const graph = scanProject(path.resolve(positionals[0] ?? '.'));
   if (values.json) {
-    const { files, ...rest } = graph;
-    write(JSON.stringify({ ...rest, fileCount: Object.keys(files).length }, null, 2) + '\n');
+    write(JSON.stringify(toPublicGraph(graph), null, 2) + '\n');
     return 0;
   }
   write(formatSummary(graph, values.lang === 'sv' ? 'sv' : 'en'));

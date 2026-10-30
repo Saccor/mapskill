@@ -19,7 +19,7 @@ describe('M1 acceptance criteria from the spec', () => {
     expect(has('complex-function', 'lib/discount.ts')).toBe(true);
   });
 
-  it.each(['clean-app', 'conventions-app'])('reports no certain findings in %s', (name) => {
+  it.each(['clean-app', 'conventions-app', 'beginner-app'])('reports no certain findings in %s', (name) => {
     const g = scanProject(fixture(name));
     expect(g.findings.filter((f) => f.certainty === 'certain')).toEqual([]);
   });

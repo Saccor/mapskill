@@ -1,0 +1,11 @@
+{
+  "name": "@mapskill/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "ignore": "^7.0.5",
+    "typescript": "~5.9.3"
+  }
+}

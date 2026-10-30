@@ -21,7 +21,12 @@ export async function request<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
   });
-  const json = (await res.json()) as T & { error?: string };
+  let json: T & { error?: string };
+  try {
+    json = (await res.json()) as T & { error?: string };
+  } catch {
+    throw new DaemonRequestError(res.status, res.statusText);
+  }
   if (!res.ok) throw new DaemonRequestError(res.status, json.error ?? res.statusText);
   return json;
 }

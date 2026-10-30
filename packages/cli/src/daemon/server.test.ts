@@ -1,4 +1,5 @@
 import http from 'node:http';
+import net from 'node:net';
 import type { PublicGraph } from '@mapskill/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
@@ -123,6 +124,41 @@ describe('WebSocket', () => {
     expect(server.clientCount()).toBe(0);
   });
 
+  it('survives a malformed upgrade request', async () => {
+    server = await startServer(fakeDeps().deps);
+    const sock = net.connect(server.port, '127.0.0.1');
+    await new Promise<void>((resolve) => sock.once('connect', () => resolve()));
+    const closed = new Promise<void>((resolve) => sock.once('close', () => resolve()));
+    sock.on('error', () => {});
+    sock.resume();
+    sock.write('GET http://[ HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n');
+    await closed;
+    expect(await request({ port: server.port, token: TOKEN }, 'GET', '/api/status')).toMatchObject({ ok: true });
+  });
+
+  it('rejects a WebSocket upgrade with a foreign Host header', async () => {
+    server = await startServer(fakeDeps().deps);
+    const ws = new WebSocket(`ws://127.0.0.1:${server.port}/ws`, { headers: { host: 'evil.example' } });
+    const outcome = await new Promise<string>((resolve) => {
+      ws.on('open', () => resolve('open'));
+      ws.on('error', () => resolve('error'));
+    });
+    expect(outcome).toBe('error');
+    expect(server.clientCount()).toBe(0);
+  });
+
+  it('sends nothing to a socket that has not said hello', async () => {
+    server = await startServer(fakeDeps().deps, { helloTimeoutMs: 60_000 });
+    const ws = new WebSocket(`ws://127.0.0.1:${server.port}/ws`);
+    const received: unknown[] = [];
+    ws.on('message', (d) => received.push(d));
+    await new Promise<void>((resolve) => ws.once('open', () => resolve()));
+    server.broadcast({ type: 'activity', at: 1, files: [] });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(received).toEqual([]);
+    ws.terminate();
+  });
+
   it('sends the graph after hello and then broadcasts', async () => {
     server = await startServer(fakeDeps().deps);
     const client = await connect({ port: server.port, token: TOKEN });
@@ -133,5 +169,22 @@ describe('WebSocket', () => {
     expect(client.messages[1]).toEqual({ type: 'activity', at: 1, files: [{ path: 'a.ts', by: 'claude' }] });
     client.close();
     await waitFor(() => server!.clientCount() === 0);
+  });
+});
+
+describe('request helper', () => {
+  it('throws DaemonRequestError for a non-JSON answer', async () => {
+    const html = http.createServer((_req, res) => {
+      res.writeHead(502, 'Bad Gateway', { 'content-type': 'text/html' });
+      res.end('<html>nope</html>');
+    });
+    await new Promise<void>((resolve) => html.listen(0, '127.0.0.1', () => resolve()));
+    const port = (html.address() as net.AddressInfo).port;
+    try {
+      await expect(request({ port, token: 't' }, 'GET', '/x')).rejects.toMatchObject({ status: 502, message: 'Bad Gateway' });
+    } finally {
+      html.closeAllConnections();
+      await new Promise<void>((resolve) => html.close(() => resolve()));
+    }
   });
 });

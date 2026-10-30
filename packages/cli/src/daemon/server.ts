@@ -127,7 +127,8 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
 
   const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
   server.on('upgrade', (req, socket, head) => {
-    const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
+    // Compare the raw path: URL parsing of attacker-controlled input could throw.
+    const pathname = (req.url ?? '').split('?')[0];
     if (pathname !== '/ws' || !allowedHost(req.headers.host)) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       socket.destroy();
@@ -171,6 +172,8 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
     server.listen(0, '127.0.0.1', () => resolve());
   });
   port = (server.address() as AddressInfo).port;
+  // After listening, a late 'error' event must not crash the process.
+  server.on('error', () => {});
 
   return {
     port,

@@ -20,6 +20,9 @@ describe('routeFileInfo', () => {
     ['pages/index.tsx', { kind: 'pages-page', route: '/' }],
     ['pages/blog/index.tsx', { kind: 'pages-page', route: '/blog' }],
     ['pages/api/legacy.ts', { kind: 'pages-api', route: '/api/legacy' }],
+    ['pages/_app.tsx', { kind: 'layout', route: '/' }],
+    ['src/pages/_document.tsx', { kind: 'layout', route: '/' }],
+    ['pages/_error.tsx', { kind: 'error', route: '/' }],
     ['middleware.ts', { kind: 'middleware', route: '/' }],
   ])('%s', (file, expected) => {
     expect(routeFileInfo(file)).toEqual(expected);

@@ -27,6 +27,9 @@ export function routeFileInfo(rel: string): RouteFile | null {
     if (rest.startsWith('api/') || rest === 'api') {
       return { kind: 'pages-api', route: '/' + rest.replace(/\/index$/, '') };
     }
+    const base = rest.slice(rest.lastIndexOf('/') + 1);
+    if (base === '_error') return { kind: 'error', route: '/' };
+    if (base.startsWith('_')) return { kind: 'layout', route: '/' };
     return { kind: 'pages-page', route: '/' + rest.replace(/(^|\/)index$/, '') };
   }
   return null;

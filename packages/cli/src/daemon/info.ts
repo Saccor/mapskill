@@ -24,7 +24,7 @@ export function readDaemonInfo(root: string): DaemonInfo | null {
 
 export function writeDaemonInfo(root: string, info: DaemonInfo): void {
   ensureMapskillDir(root);
-  writeJsonAtomic(mapskillPath(root, INFO_FILE), info);
+  writeJsonAtomic(mapskillPath(root, INFO_FILE), info, 0o600); // the token is private to the user
 }
 
 /** Removes daemon.json only when it still belongs to `pid` (a newer daemon may have replaced it). */

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { tmpProject } from '@mapskill/core/test-helpers';
 import { describe, expect, it } from 'vitest';
+import { writeDaemonInfo } from './info';
 import { ensureGitignore, readJson, writeJsonAtomic } from './paths';
 
 describe('ensureGitignore', () => {
@@ -40,5 +41,17 @@ describe('writeJsonAtomic', () => {
     const root = tmpProject({ 'bad.json': '{nope' });
     expect(readJson(path.join(root, 'bad.json'))).toBeNull();
     expect(readJson(path.join(root, 'missing.json'))).toBeNull();
+  });
+});
+
+describe('file permissions (POSIX)', () => {
+  it.skipIf(process.platform === 'win32')('keeps the token private: daemon.json 0600 in a 0700 .mapskill', () => {
+    const root = tmpProject({});
+    writeDaemonInfo(root, { pid: 1, port: 2, token: 't', version: 'v', root, startedAt: 0 });
+    expect(fs.statSync(path.join(root, '.mapskill')).mode & 0o777).toBe(0o700);
+    expect(fs.statSync(path.join(root, '.mapskill', 'daemon.json')).mode & 0o777).toBe(0o600);
+    const file = path.join(root, 'x.json');
+    writeJsonAtomic(file, {}, 0o600);
+    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
   });
 });

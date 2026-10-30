@@ -8,7 +8,8 @@ export function mapskillPath(root: string, name: string): string {
 }
 
 export function ensureMapskillDir(root: string): void {
-  fs.mkdirSync(path.join(root, MAPSKILL_DIR), { recursive: true });
+  // 0700: daemon.json holds the token. No effect on Windows, where the user profile ACLs apply.
+  fs.mkdirSync(path.join(root, MAPSKILL_DIR), { recursive: true, mode: 0o700 });
 }
 
 /** Adds .mapskill/ to an existing .gitignore, once. Returns true when the file was changed. Never creates a .gitignore. */
@@ -27,9 +28,9 @@ function sleepSync(ms: number): void {
 }
 
 /** Writes JSON to a temporary file and renames it over the target, so readers never see half a file. Retries briefly when Windows holds the target open. */
-export function writeJsonAtomic(file: string, data: unknown): void {
+export function writeJsonAtomic(file: string, data: unknown, mode?: number): void {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.writeFileSync(tmp, JSON.stringify(data), mode === undefined ? undefined : { mode });
   for (let attempt = 0; ; attempt++) {
     try {
       fs.renameSync(tmp, file);

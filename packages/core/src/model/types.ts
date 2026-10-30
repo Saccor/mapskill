@@ -70,6 +70,8 @@ export interface FileFacts {
   /** Identifiers referenced anywhere in the file (top level, bodies, type positions), excluding declaration names. Sorted, unique. */
   fileRefs: string[];
   parseError?: string;
+  /** True when the current content does not parse and these facts come from the last version that did. `parseError` describes the current content. */
+  stale?: boolean;
 }
 
 export interface FileLink { from: string; to: string; names: string[]; typeOnly: boolean }

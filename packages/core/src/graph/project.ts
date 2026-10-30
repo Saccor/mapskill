@@ -7,7 +7,8 @@ import { runAnalyzers } from '../analyze/index';
 import type { FileFacts, FileLink, Framework, Graph } from '../model/types';
 import { extractFacts } from '../parse/extract';
 import { createResolver, type Resolver } from '../resolve/resolver';
-import { listSourceFiles } from '../scan/files';
+import { createSourceFilter, listSourceFiles } from '../scan/files';
+import { diffGraphs, isEmptyDelta, toPublicGraph, type GraphDelta } from './delta';
 import { sha1 } from '../util/hash';
 
 export const MAX_FILE_BYTES = 1_000_000;
@@ -47,8 +48,12 @@ export function readSourceFile(root: string, rel: string, previous?: FileFacts):
   } catch {
     return 'skipped';
   }
-  if (previous && previous.hash === sha1(text)) return { ...previous, mtimeMs: stat.mtimeMs };
-  return extractFacts(rel, text, stat.mtimeMs);
+  if (previous && !previous.stale && previous.hash === sha1(text)) return { ...previous, mtimeMs: stat.mtimeMs };
+  const next = extractFacts(rel, text, stat.mtimeMs);
+  if (next.parseError && previous && (!previous.parseError || previous.stale)) {
+    return { ...previous, mtimeMs: stat.mtimeMs, parseError: next.parseError, stale: true };
+  }
+  return next;
 }
 
 /** Records a read result. Returns true when a file appeared on disk or disappeared from it. */
@@ -144,4 +149,75 @@ export function buildGraph(project: Project): Graph {
     findings,
     health: computeHealth(model.nodes, findings),
   };
+}
+
+export interface ChangeResult {
+  /** Always continue with this project: it is a new object when the project was reloaded. */
+  project: Project;
+  delta: GraphDelta;
+  /** True when a project config file changed and everything was read again. */
+  reloaded: boolean;
+  /** True when nothing a client can see changed. */
+  empty: boolean;
+}
+
+const PROJECT_CONFIG = new Set([
+  'package.json', 'tsconfig.json', 'jsconfig.json', 'prisma/schema.prisma', 'components.json', '.gitignore',
+]);
+
+/** Files whose change affects how the whole project is read (framework, aliases, Prisma models, ignore rules, nested packages). */
+export function isProjectConfigFile(rel: string): boolean {
+  return PROJECT_CONFIG.has(rel) || rel.endsWith('/package.json') || /^tsconfig\.[^/]+\.json$/.test(rel);
+}
+
+function normalizeRel(p: string): string {
+  return p.split('\\').join('/').replace(/^\.\//, '');
+}
+
+/** Re-reads the given project-relative paths and rebuilds the graph. Paths may be new, changed, deleted or not source files at all. */
+export function applyFileChanges(project: Project, paths: string[]): ChangeResult {
+  const rels = [...new Set(paths.map(normalizeRel))].filter((r) => r !== '');
+  const before = toPublicGraph(project.graph);
+  const finish = (next: Project, reloaded: boolean): ChangeResult => {
+    const delta = diffGraphs(before, toPublicGraph(next.graph));
+    return { project: next, delta, reloaded, empty: isEmptyDelta(delta, before) };
+  };
+
+  if (rels.some(isProjectConfigFile)) return finish(loadProject(project.root, project.facts), true);
+
+  const isSource = createSourceFilter(project.root);
+  const relevant = rels.filter((r) => isSource(r) || r in project.facts || project.skipped.has(r));
+  if (relevant.length === 0) return finish(project, false);
+
+  let fileSetChanged = false;
+  for (const rel of relevant) {
+    const result = isSource(rel) ? readSourceFile(project.root, rel, project.facts[rel]) : 'missing';
+    if (storeRead(project, rel, result)) fileSetChanged = true;
+  }
+  if (fileSetChanged) project.resolver.clearCache();
+  project.graph = buildGraph(project);
+  return finish(project, false);
+}
+
+/** Source files that appeared, disappeared or got a different mtime since they were last read. Used as a safety net for missed watcher events. */
+export function findDrift(project: Project): string[] {
+  const listed = listSourceFiles(project.root);
+  const listedSet = new Set(listed);
+  const known = new Set([...Object.keys(project.facts), ...project.skipped]);
+  const out = new Set<string>();
+  for (const rel of listed) {
+    if (!known.has(rel)) {
+      out.add(rel);
+      continue;
+    }
+    const facts = project.facts[rel];
+    if (!facts) continue;
+    try {
+      if (fs.statSync(path.join(project.root, rel)).mtimeMs !== facts.mtimeMs) out.add(rel);
+    } catch {
+      out.add(rel);
+    }
+  }
+  for (const rel of known) if (!listedSet.has(rel)) out.add(rel);
+  return [...out].sort();
 }

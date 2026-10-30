@@ -5,6 +5,9 @@ import { collectCallsAndProblems } from './calls';
 import { sha1 } from '../util/hash';
 import { functionMetrics, type FnNode } from './functions';
 
+/** Bump when FileFacts or the extraction rules change. Invalidates .mapskill/cache.json. */
+export const FACTS_VERSION = 1;
+
 export function scriptKindFor(path: string): ts.ScriptKind {
   if (path.endsWith('.tsx')) return ts.ScriptKind.TSX;
   if (path.endsWith('.jsx')) return ts.ScriptKind.JSX;

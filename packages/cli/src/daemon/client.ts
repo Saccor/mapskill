@@ -76,7 +76,7 @@ export function selfCommand(): { command: string; args: string[] } {
 }
 
 /** Starts `mapskill daemon <root>` detached from this process, logging to .mapskill/daemon.log. */
-export function spawnDaemon(root: string): void {
+export function spawnDaemon(root: string, override?: { command: string; args: string[] }): void {
   ensureMapskillDir(root);
   const logFile = mapskillPath(root, 'daemon.log');
   let flags = 'a';
@@ -87,13 +87,15 @@ export function spawnDaemon(root: string): void {
   }
   const log = fs.openSync(logFile, flags);
   try {
-    const { command, args } = selfCommand();
+    const { command, args } = override ?? selfCommand();
     const child = spawn(command, [...args, 'daemon', root], {
       cwd: root,
       detached: true,
       stdio: ['ignore', log, log],
       windowsHide: true,
     });
+    // Async spawn failures (ENOENT, EACCES) arrive as 'error' events; unhandled they would crash the caller.
+    child.on('error', () => {});
     child.unref();
   } finally {
     fs.closeSync(log);

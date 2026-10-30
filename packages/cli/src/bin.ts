@@ -20,7 +20,7 @@ const commands: Record<string, () => number | Promise<number>> = {
   daemon: () => runDaemonCommand(dir),
 };
 
-const run = command === undefined ? undefined : commands[command];
+const run = command !== undefined && Object.hasOwn(commands, command) ? commands[command] : undefined;
 if (!run) {
   process.stderr.write(USAGE);
   process.exit(1);

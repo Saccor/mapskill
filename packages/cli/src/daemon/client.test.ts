@@ -3,7 +3,7 @@ import { tmpProject } from '@mapskill/core/test-helpers';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runStatus, runStop } from '../commands';
 import { waitFor } from '../test-utils';
-import { ensureDaemon, pingDaemon } from './client';
+import { ensureDaemon, pingDaemon, spawnDaemon } from './client';
 import { DAEMON_VERSION, isPidAlive, readDaemonInfo, writeDaemonInfo } from './info';
 
 const deadPid = (): number => spawnSync(process.execPath, ['-e', '0']).pid!;
@@ -59,6 +59,14 @@ describe('ensureDaemon', () => {
     expect(a).not.toBeNull();
     expect(b?.pid).toBe(a!.pid);
   }, 30_000);
+});
+
+describe('ensureDaemon fail-open', () => {
+  it('resolves null instead of crashing when the process cannot be spawned', async () => {
+    const root = newProject();
+    const broken = (r: string): void => spawnDaemon(r, { command: 'mapskill-no-such-command', args: [] });
+    expect(await ensureDaemon(root, { timeoutMs: 500, spawn: broken })).toBeNull();
+  });
 });
 
 describe('CLI commands', () => {

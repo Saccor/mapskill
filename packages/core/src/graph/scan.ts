@@ -32,14 +32,18 @@ function nestedPackageDirsOf(root: string, paths: string[]): string[] {
 export function scanProject(root: string): Graph {
   const framework: Framework = isNextProject(root) ? 'nextjs' : 'generic';
   const files: Record<string, FileFacts> = {};
+  let skippedFile = false;
   for (const rel of listSourceFiles(root)) {
     const abs = path.join(root, rel);
     try {
       const stat = fs.statSync(abs);
-      if (stat.size > MAX_FILE_BYTES) continue;
+      if (stat.size > MAX_FILE_BYTES) {
+        skippedFile = true;
+        continue;
+      }
       files[rel] = extractFacts(rel, fs.readFileSync(abs, 'utf8'), stat.mtimeMs);
     } catch {
-      continue; // unreadable file: skip it
+      skippedFile = true; // unreadable file: skip it
     }
   }
 
@@ -65,7 +69,7 @@ export function scanProject(root: string): Graph {
 
   const model = buildModel({ files, resolve, prismaModels: readPrismaModels(root), framework });
   const hasAppDir = ['app', 'src/app', 'pages', 'src/pages'].some((d) => fs.existsSync(path.join(root, d)));
-  const degraded = unresolvedLocal || Boolean(resolver.configError) || (framework === 'generic' && hasAppDir);
+  const degraded = skippedFile || unresolvedLocal || Boolean(resolver.configError) || (framework === 'generic' && hasAppDir);
   const findings = runAnalyzers({
     files,
     links,

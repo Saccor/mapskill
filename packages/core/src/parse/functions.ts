@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { isPropertyNamePosition } from './ast-utils';
 import type { FunctionFact } from '../model/types';
 import { fnv1a, sha1 } from '../util/hash';
 
@@ -29,7 +30,7 @@ export function functionMetrics(sf: ts.SourceFile, name: string, node: FnNode, e
   const exact = tokens.map((t) => t.getText(sf));
   const bound = boundNames(node);
   const renamed = tokens.map((t) =>
-    t.kind === ts.SyntaxKind.Identifier && bound.has(t.getText(sf)) && !isPropertyName(t as ts.Identifier)
+    t.kind === ts.SyntaxKind.Identifier && bound.has(t.getText(sf)) && !isPropertyNamePosition(t as ts.Identifier)
       ? 'ID'
       : LITERAL_KINDS.has(t.kind)
         ? 'LIT'
@@ -68,18 +69,6 @@ function boundNames(node: FnNode): Set<string> {
   for (const p of node.parameters) visit(p);
   if (node.body) visit(node.body);
   return out;
-}
-
-function isPropertyName(x: ts.Identifier): boolean {
-  const p = x.parent;
-  return (
-    (ts.isPropertyAccessExpression(p) && p.name === x) ||
-    (ts.isQualifiedName(p) && p.right === x) ||
-    (ts.isPropertyAssignment(p) && p.name === x) ||
-    (ts.isJsxAttribute(p) && p.name === x) ||
-    ((ts.isPropertySignature(p) || ts.isPropertyDeclaration(p) || ts.isMethodDeclaration(p) || ts.isMethodSignature(p) || ts.isEnumMember(p)) && p.name === x) ||
-    (ts.isBindingElement(p) && p.propertyName === x)
-  );
 }
 
 function leafTokens(node: ts.Node, sf: ts.SourceFile, out: ts.Node[]): void {

@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { isPropertyNamePosition } from './ast-utils';
 import type { FileFacts, ImportBinding, ImportFact } from '../model/types';
 import { collectCallsAndProblems } from './calls';
 import { sha1 } from '../util/hash';
@@ -39,7 +40,6 @@ function importFact(st: ts.ImportDeclaration, line: number): ImportFact {
   const typeOnly = !!clause?.isTypeOnly || inlineTypeOnly;
   if (nb && ts.isNamedImports(nb)) {
     for (const el of nb.elements) {
-      if (!typeOnly && el.isTypeOnly) continue;
       bindings.push({ imported: (el.propertyName ?? el.name).text, local: el.name.text });
     }
   }
@@ -66,7 +66,6 @@ function handleExportDeclaration(
       typeOnly = typeOnly || (clause.elements.length > 0 && clause.elements.every((el) => el.isTypeOnly));
       for (const el of clause.elements) {
         facts.exports.push({ name: el.name.text, kind: 'reexport', line });
-        if (!typeOnly && el.isTypeOnly) continue;
         bindings.push({ imported: (el.propertyName ?? el.name).text, local: el.name.text });
       }
     }
@@ -153,18 +152,6 @@ function isDeclarationName(x: ts.Identifier): boolean {
       ts.isClassDeclaration(p) || ts.isClassExpression(p) || ts.isInterfaceDeclaration(p) || ts.isTypeAliasDeclaration(p) ||
       ts.isEnumDeclaration(p) || ts.isTypeParameterDeclaration(p) || ts.isModuleDeclaration(p)) &&
     p.name === x
-  );
-}
-
-function isPropertyNamePosition(x: ts.Identifier): boolean {
-  const p = x.parent;
-  return (
-    (ts.isPropertyAccessExpression(p) && p.name === x) ||
-    (ts.isQualifiedName(p) && p.right === x) ||
-    (ts.isPropertyAssignment(p) && p.name === x) ||
-    (ts.isJsxAttribute(p) && p.name === x) ||
-    ((ts.isPropertySignature(p) || ts.isPropertyDeclaration(p) || ts.isMethodDeclaration(p) || ts.isMethodSignature(p) || ts.isEnumMember(p)) && p.name === x) ||
-    (ts.isBindingElement(p) && p.propertyName === x)
   );
 }
 

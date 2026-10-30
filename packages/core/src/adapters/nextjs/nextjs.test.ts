@@ -91,10 +91,10 @@ describe('Next.js convention files', async () => {
 });
 
 describe('isTestFile segments', () => {
-  it.each(['test/setup.ts', 'tests/a.ts', 'e2e/home.spec.ts', 'cypress/support/e2e.ts', 'src/__tests__/a.ts', 'src/test/a.ts', 'a/b.test.ts'])('%s', (f) => {
+  it.each(['test/setup.ts', 'tests/a.ts', 'e2e/home.spec.ts', 'cypress/support/e2e.ts', 'src/__tests__/a.ts', 'src/e2e/a.ts', 'lib/__tests__/a.ts', 'a/b.test.ts', 'app/api/test/route.test.ts'])('%s', (f) => {
     expect(isTestFile(f)).toBe(true);
   });
-  it.each(['src/latest/a.ts', 'lib/contest.ts', 'src/attests/a.ts'])('%s is not a test file', (f) => {
+  it.each(['app/api/test/route.ts', 'app/test/page.tsx', 'src/app/test/page.tsx', 'lib/test/a.ts', 'src/latest/a.ts', 'lib/contest.ts', 'src/attests/a.ts'])('%s is not a test file', (f) => {
     expect(isTestFile(f)).toBe(false);
   });
 });

@@ -15,6 +15,7 @@ describe('M1 acceptance criteria from the spec', () => {
     expect(has('page-touches-table', 'app/page.tsx')).toBe(true);
     expect(has('circular-import', 'lib/cycle-a.ts')).toBe(true);
     expect(has('hardcoded-secret', 'app/api/checkout/route.ts')).toBe(true);
+    expect(g.findings.some((f) => f.kind === 'hardcoded-secret' && f.certainty === 'certain' && f.files.includes('app/api/test/route.ts'))).toBe(true);
     expect(has('swallowed-error', 'lib/notify.ts')).toBe(true);
     expect(has('complex-function', 'lib/discount.ts')).toBe(true);
   });

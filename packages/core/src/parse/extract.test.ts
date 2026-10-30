@@ -73,11 +73,11 @@ import D, { type E } from './d';
 export { type F } from './f';
 export { type G, H } from './g';`);
     expect(f.imports[0]).toMatchObject({ typeOnly: true, bindings: [{ imported: 'A', local: 'A' }] });
-    expect(f.imports[1]).toMatchObject({ typeOnly: false, bindings: [{ imported: 'C', local: 'C' }] });
+    expect(f.imports[1]).toMatchObject({ typeOnly: false, bindings: [{ imported: 'B', local: 'B' }, { imported: 'C', local: 'C' }] });
     expect(f.imports[2].typeOnly).toBe(false);
-    expect(f.imports[2].bindings.map((b) => b.imported)).toEqual(['default']);
+    expect(f.imports[2].bindings.map((b) => b.imported)).toEqual(['default', 'E']);
     expect(f.imports[3].typeOnly).toBe(true);
-    expect(f.imports[4]).toMatchObject({ typeOnly: false, bindings: [{ imported: 'H', local: 'H' }] });
+    expect(f.imports[4]).toMatchObject({ typeOnly: false, bindings: [{ imported: 'G', local: 'G' }, { imported: 'H', local: 'H' }] });
   });
 
   it('records local type exports as kind type', () => {

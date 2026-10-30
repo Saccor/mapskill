@@ -132,4 +132,28 @@ describe('scanProject hardening', () => {
     const ids = g.findings.map((f) => f.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it('does not flag a class imported with an inline type binding and used only as a type', () => {
+    const f = kinds(
+      {
+        'package.json': NEXT,
+        'app/page.tsx': `import { type Store, useStore } from '../lib/store'; export default function P(p: { s?: Store }) { return <p>{String(useStore())}</p>; }`,
+        'lib/store.ts': `export class Store {}
+export const useStore = () => 1;`,
+      },
+      'unused-export',
+    );
+    expect(f).toEqual([]);
+  });
+
+  it('degrades reachability findings when a file had to be skipped', () => {
+    const files = { 'package.json': NEXT, 'app/page.tsx': PAGE, 'lib/dead.ts': `export const dead = 1;`, 'lib/huge.ts': `export const big = '${'a'.repeat(1_100_000)}';` };
+    expect(kinds(files, 'orphan-file')).toEqual(['lib/dead.ts:likely']);
+  });
+
+  it('keeps live keys in app/api/test/route.ts certain', () => {
+    const f = kinds({ 'package.json': NEXT, 'app/api/test/route.ts': `const k = 'sk_live_51HxAbCdEfGhIjKlMnOpQr';
+export async function GET() { return Response.json(k); }` }, 'hardcoded-secret');
+    expect(f).toEqual(['app/api/test/route.ts:certain']);
+  });
 });

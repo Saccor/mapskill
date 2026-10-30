@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { tmpProject } from '../test-helpers';
 import { applyFileChanges, findDrift, isProjectConfigFile, loadProject } from './project';
 import { scanProject } from './scan';
@@ -100,6 +100,62 @@ describe('applyFileChanges', () => {
     expect(fixed.project.facts['lib/a.ts'].stale).toBeUndefined();
     expect(fixed.project.facts['lib/a.ts'].parseError).toBeUndefined();
     expect(fixed.delta.unreadableFiles).toEqual([]);
+  });
+
+  it('drops paths that leave the root and never reads outside it', () => {
+    const root = base();
+    const project = loadProject(root);
+    const outsideName = `${path.basename(root)}-outside.ts`;
+    const outside = path.join(path.dirname(root), outsideName);
+    fs.writeFileSync(outside, fn('sumOutside'));
+    const reads = vi.spyOn(fs, 'readFileSync');
+    try {
+      const r = applyFileChanges(project, [
+        `lib/../../${outsideName}`,
+        `../${outsideName}`,
+        `./../${outsideName}`,
+        `lib\\..\\..\\${outsideName}`,
+        '.',
+        '..',
+        'lib/..',
+        path.resolve(outside),
+      ]);
+      expect(r.empty).toBe(true);
+      expect(r.reloaded).toBe(false);
+      expect(r.project).toBe(project);
+      expect(Object.keys(r.project.facts).some((k) => k.includes('..') || k.includes('outside'))).toBe(false);
+      expect(reads.mock.calls.some(([p]) => String(p).includes(outsideName))).toBe(false);
+    } finally {
+      reads.mockRestore();
+      fs.rmSync(outside, { force: true });
+    }
+  });
+
+  it('normalises dot segments inside the root', () => {
+    const root = base();
+    const project = loadProject(root);
+    write(root, 'lib/b.ts', fn('sumB'));
+    const r = applyFileChanges(project, ['lib/x/../b.ts']);
+    expect(Object.keys(r.project.facts)).toContain('lib/b.ts');
+    expect(r.project.graph).toEqual(scanProject(root));
+  });
+
+  it('ignores a symlinked source file, like a full scan does', (ctx) => {
+    const root = base();
+    const target = path.join(root, 'shared-target.txt');
+    fs.writeFileSync(target, fn('sumLinked'));
+    try {
+      fs.symlinkSync(target, path.join(root, 'lib', 'linked.ts'), 'file');
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EPERM' || code === 'EACCES') return ctx.skip();
+      throw err;
+    }
+    const project = loadProject(root);
+    expect(Object.keys(project.facts)).not.toContain('lib/linked.ts');
+    const r = applyFileChanges(project, ['lib/linked.ts']);
+    expect(Object.keys(r.project.facts)).not.toContain('lib/linked.ts');
+    expect(r.project.graph).toEqual(scanProject(root));
   });
 });
 

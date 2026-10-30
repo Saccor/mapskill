@@ -244,4 +244,27 @@ describe('toProjectRel', () => {
     expect(toProjectRel(root, path.resolve('/elsewhere/a.ts'))).toBeNull();
     expect(toProjectRel(root, root)).toBeNull();
   });
+
+  it('maps an existing file and a deleted file under a real root', () => {
+    const root = fs.realpathSync.native(tmpProject({ 'lib/a.ts': 'export const a = 1;\n', 'lib/gone.ts': '' }));
+    fs.rmSync(path.join(root, 'lib/gone.ts'));
+    expect(toProjectRel(root, path.join(root, 'lib', 'a.ts'))).toBe('lib/a.ts');
+    expect(toProjectRel(root, 'lib/a.ts')).toBe('lib/a.ts');
+    expect(toProjectRel(root, path.join(root, 'lib', 'gone.ts'))).toBe('lib/gone.ts');
+    expect(toProjectRel(root, path.join(root, '..', 'outside.ts'))).toBeNull();
+  });
+
+  it.runIf(process.platform === 'win32')('maps a hook path with different letter case to the on-disk casing', () => {
+    const root = fs.realpathSync.native(tmpProject({ 'lib/a.ts': 'export const a = 1;\n' }));
+    expect(toProjectRel(root, 'LIB/A.TS')).toBe('lib/a.ts');
+    expect(toProjectRel(root, path.join(root.toUpperCase(), 'LIB', 'A.TS'))).toBe('lib/a.ts');
+  });
+});
+
+describe('startDaemon root', () => {
+  it.runIf(process.platform === 'win32')('canonicalises the root letter case', async () => {
+    const root = fs.realpathSync.native(tmpProject(files()));
+    const h = await start(root.toUpperCase(), { watch: false });
+    expect(h.info.root).toBe(root);
+  });
 });

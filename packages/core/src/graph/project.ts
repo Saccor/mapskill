@@ -30,12 +30,15 @@ export interface Project {
 
 export type ReadResult = FileFacts | 'missing' | 'skipped';
 
-/** Reads one source file. Reuses `previous` when the content hash is unchanged (only the mtime is refreshed). */
+/**
+ * Reads one source file. Reuses `previous` when the content hash is unchanged (only the mtime is refreshed).
+ * Symlinks count as 'missing', matching listSourceFiles, which skips them.
+ */
 export function readSourceFile(root: string, rel: string, previous?: FileFacts): ReadResult {
   const abs = path.join(root, rel);
   let stat: fs.Stats;
   try {
-    stat = fs.statSync(abs);
+    stat = fs.lstatSync(abs);
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     return code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'skipped';
@@ -170,13 +173,18 @@ export function isProjectConfigFile(rel: string): boolean {
   return PROJECT_CONFIG.has(rel) || rel.endsWith('/package.json') || /^tsconfig\.[^/]+\.json$/.test(rel);
 }
 
-function normalizeRel(p: string): string {
-  return p.split('\\').join('/').replace(/^\.\//, '');
+/** A clean project-relative path, or null for anything that is empty, absolute or leaves the root. */
+function normalizeRel(p: string): string | null {
+  const slashed = p.split('\\').join('/');
+  if (path.posix.isAbsolute(slashed) || path.win32.isAbsolute(slashed) || /^[a-zA-Z]:/.test(slashed)) return null;
+  const rel = path.posix.normalize(slashed).replace(/\/+$/, '');
+  if (rel === '' || rel === '.' || rel === '..' || rel.startsWith('../') || rel.startsWith('./')) return null;
+  return rel;
 }
 
 /** Re-reads the given project-relative paths and rebuilds the graph. Paths may be new, changed, deleted or not source files at all. */
 export function applyFileChanges(project: Project, paths: string[]): ChangeResult {
-  const rels = [...new Set(paths.map(normalizeRel))].filter((r) => r !== '');
+  const rels = [...new Set(paths.map(normalizeRel).filter((r): r is string => r !== null))];
   const before = toPublicGraph(project.graph);
   const finish = (next: Project, reloaded: boolean): ChangeResult => {
     const delta = diffGraphs(before, toPublicGraph(next.graph));

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import {
   applyFileChanges,
@@ -41,15 +42,29 @@ export interface DaemonHandle {
   project(): Project | undefined;
 }
 
-/** Project-relative path with '/' separators, or null when `file` lies outside the project (or is the root itself). */
+/** The on-disk spelling of `p` (letter case, junctions and symlinks resolved), or null when it does not exist. */
+function realPath(p: string): string | null {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Project-relative path with '/' separators, or null when `file` lies outside the project (or is the root itself).
+ * `root` must be canonical (see startDaemon). An existing file is resolved to its on-disk spelling first, so a hook
+ * path with other letter case on Windows still maps to the path the graph uses. A deleted file maps as given.
+ */
 export function toProjectRel(root: string, file: string): string | null {
-  const rel = path.relative(root, path.resolve(root, file)).split(path.sep).join('/');
+  const abs = path.resolve(root, file);
+  const rel = path.relative(root, realPath(abs) ?? abs).split(path.sep).join('/');
   if (rel === '' || rel === '..' || rel.startsWith('../') || path.isAbsolute(rel)) return null;
   return rel;
 }
 
 export async function startDaemon(rootArg: string, options: DaemonOptions = {}): Promise<DaemonHandle> {
-  const root = path.resolve(rootArg);
+  const root = realPath(path.resolve(rootArg)) ?? path.resolve(rootArg);
   const log = options.log ?? (() => {});
   const idleMs = options.idleMs ?? 30 * 60_000;
   ensureMapskillDir(root);

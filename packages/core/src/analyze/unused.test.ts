@@ -32,5 +32,9 @@ describe('findUnused', () => {
     expect(isEntryFile('lib/x.test.ts', 'nextjs')).toBe(true);
     expect(isEntryFile('lib/x.ts', 'nextjs')).toBe(false);
     expect(isEntryFile('src/index.ts', 'generic')).toBe(true);
+    expect(isEntryFile('pages/_app.tsx', 'nextjs')).toBe(true);
+    expect(isEntryFile('app/sitemap.ts', 'nextjs')).toBe(true);
+    expect(isEntryFile('src/app/blog/opengraph-image.tsx', 'nextjs')).toBe(true);
+    expect(isEntryFile('lib/sitemap.ts', 'nextjs')).toBe(false);
   });
 });

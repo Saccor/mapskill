@@ -9,11 +9,16 @@ const FRAMEWORK_EXPORTS = new Set([
   'revalidate', 'dynamic', 'dynamicParams', 'fetchCache', 'runtime', 'preferredRegion', 'maxDuration',
   'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS',
   'config', 'middleware', 'getServerSideProps', 'getStaticProps', 'getStaticPaths',
+  'alt', 'size', 'contentType', 'generateImageMetadata', 'generateSitemaps', 'experimental_ppr',
 ]);
+
+function isNextMetadataFile(file: string): boolean {
+  return /^(src\/)?app\/(.*\/)?(opengraph-image|twitter-image|icon|apple-icon|sitemap|robots|manifest)\.[cm]?[jt]sx?$/.test(file);
+}
 
 export function isEntryFile(file: string, framework: Framework): boolean {
   if (isTestFile(file) || !file.includes('/') || file.startsWith('scripts/') || file.startsWith('prisma/')) return true;
-  if (framework === 'nextjs') return routeFileInfo(file) !== null || /^(src\/)?instrumentation\.[cm]?[jt]sx?$/.test(file);
+  if (framework === 'nextjs') return routeFileInfo(file) !== null || isNextMetadataFile(file) || /^(src\/)?instrumentation\.[cm]?[jt]sx?$/.test(file);
   return /^(src\/)?(index|main|app|server)\.[cm]?[jt]sx?$/.test(file);
 }
 
@@ -28,7 +33,7 @@ export function findUnused(ctx: AnalysisContext): Finding[] {
 
   for (const f of Object.values(ctx.files)) {
     if (isTestFile(f.path) || isToolingConfig(f.path)) continue;
-    const routeFile = ctx.framework === 'nextjs' && routeFileInfo(f.path) !== null;
+    const routeFile = ctx.framework === 'nextjs' && (routeFileInfo(f.path) !== null || isNextMetadataFile(f.path));
     const used = usedNames.get(f.path) ?? new Set<string>();
     if (used.has('*')) continue;
     for (const e of f.exports) {
@@ -52,7 +57,11 @@ export function findUnused(ctx: AnalysisContext): Finding[] {
   }
 
   const adjacency = new Map<string, string[]>();
-  for (const l of ctx.links) adjacency.set(l.from, [...(adjacency.get(l.from) ?? []), l.to]);
+  for (const l of ctx.links) {
+    const list = adjacency.get(l.from);
+    if (list) list.push(l.to);
+    else adjacency.set(l.from, [l.to]);
+  }
   const reached = new Set<string>();
   const queue = Object.keys(ctx.files).filter((p) => isEntryFile(p, ctx.framework));
   while (queue.length) {

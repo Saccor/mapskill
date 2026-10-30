@@ -3,5 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "dependencies": { "@mapskill/core": "workspace:*" }
+  "dependencies": {
+    "@mapskill/core": "workspace:*",
+    "chokidar": "^4.0.3",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.0"
+  }
 }

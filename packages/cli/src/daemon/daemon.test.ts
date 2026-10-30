@@ -44,6 +44,8 @@ const write = (root: string, rel: string, text: string): void => {
 
 const handles: DaemonHandle[] = [];
 afterEach(async () => {
+  drift.fail = false;
+  drift.calls = 0;
   await Promise.all(handles.splice(0).map((h) => h.stop('test done')));
 });
 async function start(root: string, options: DaemonOptions = {}): Promise<DaemonHandle> {
@@ -96,11 +98,16 @@ describe('startDaemon', () => {
     await h.ready;
     const client = await connect(h.info);
     fs.rmSync(path.join(root, 'lib'), { recursive: true });
+    // Wait for what the client sees, not for the project: the project is updated before the delta is broadcast.
+    await waitFor(
+      () => client.messages.some((m) => m.type === 'delta' && m.delta.removedNodeIds.some((id) => id.includes('lib/b.ts'))),
+      10_000,
+    );
+    // The watcher may report lib/a.ts in a later batch than lib/b.ts, so allow one more debounce round.
     await waitFor(() => {
       const g = h.project()?.graph;
       return g !== undefined && !Object.keys(g.files).some((f) => f.startsWith('lib/'));
-    }, 10_000);
-    expect(client.messages.some((m) => m.type === 'delta' && m.delta.removedNodeIds.some((id) => id.includes('lib/b.ts')))).toBe(true);
+    }, 5000);
     client.close();
   });
 
@@ -168,6 +175,7 @@ describe('daemon lifecycle', () => {
 
   it('stop() right after start skips loading and leaves no cache or daemon.json', async () => {
     const root = tmpProject(files());
+    // Relies on startServer resolving before the load's setImmediate fires, so stop() wins the race with loading.
     const h = await startDaemon(root, { watch: false });
     await h.stop('early');
     await expect(h.done).resolves.toBe('early');

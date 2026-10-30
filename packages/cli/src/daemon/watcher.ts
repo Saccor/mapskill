@@ -21,6 +21,8 @@ export async function watchProject(
   const toRel = (abs: string): string => path.relative(root, abs).split(path.sep).join('/');
   const watcher = watch(root, {
     ignoreInitial: true,
+    // The scan skips symlinks, so the watcher does not follow them either.
+    followSymlinks: false,
     ignored: (abs: string) => {
       const rel = toRel(abs);
       return rel !== '' && !rel.startsWith('..') && isSkippedDir(rel);

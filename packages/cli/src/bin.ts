@@ -1,9 +1,36 @@
 #!/usr/bin/env node
+import { runDaemonCommand, runStatus, runStop } from './commands';
 import { runScan } from './scan';
 
+const USAGE = [
+  'Usage:',
+  '  mapskill scan [dir] [--json] [--lang en|sv]',
+  '  mapskill status [dir]    start the background daemon if needed and show where it listens',
+  '  mapskill stop [dir]      stop the background daemon',
+  '  mapskill daemon [dir]    run the daemon in this terminal',
+  '',
+].join('\n');
+
 const [command, ...rest] = process.argv.slice(2);
-if (command === 'scan') {
-  process.exit(runScan(rest));
+const dir = rest[0] ?? '.';
+const commands: Record<string, () => number | Promise<number>> = {
+  scan: () => runScan(rest),
+  status: () => runStatus(dir),
+  stop: () => runStop(dir),
+  daemon: () => runDaemonCommand(dir),
+};
+
+const run = command === undefined ? undefined : commands[command];
+if (!run) {
+  process.stderr.write(USAGE);
+  process.exit(1);
 }
-process.stderr.write('Usage: mapskill scan [dir] [--json] [--lang en|sv]\n');
-process.exit(1);
+Promise.resolve()
+  .then(run)
+  .then(
+    (code) => process.exit(code),
+    (err: unknown) => {
+      process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+      process.exit(1);
+    },
+  );

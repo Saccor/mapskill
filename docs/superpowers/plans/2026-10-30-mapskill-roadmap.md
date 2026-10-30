@@ -9,7 +9,7 @@ Tidsuppskattning: en erfaren fullstack-utvecklare, ±50 %.
 | # | Milstolpe | Veckor | Detaljplan | Levererar |
 |---|---|---|---|---|
 | M1 | Analysmotor och `mapskill scan` | 2 | [2026-10-30-m1-analysis-engine.md](2026-10-30-m1-analysis-engine.md) | Parser, modulupplösning, Next.js-adapter, graf, alla analyser, CLI som skriver ut karta och fynd |
-| M2 | Inkrementell graf och daemon | 1,5 | [2026-10-30-m2-daemon.md](2026-10-30-m2-daemon.md) | `applyFileChanges`, filvakt, cache, HTTP + WebSocket med token, `daemon.json`, självavstängning |
+| M2 | Inkrementell graf och daemon (klar) | 1,5 | [2026-10-30-m2-daemon.md](2026-10-30-m2-daemon.md) | `applyFileChanges`, filvakt, cache, HTTP + WebSocket med token, `daemon.json`, självavstängning |
 | M3 | Claude Code-plugin | 1,5 | skrivs efter M2 | Hooks (SessionStart, UserPromptSubmit, PreToolUse-lås, PostToolUse, Stop), MCP-server med fem verktyg, skill |
 | M4 | Kartvy | 3 | skrivs efter M3 | React Flow + ELK med stabil layout, sidopanel, aktivitetsrad, pulserande noder, knapparna Lås och Fråga, förfrågningskö |
 | M5 | Mål och spöknoder | 1,5 | skrivs efter M4 | YAML-mallar, fyra inbyggda mål, utvärdering, spöknoder, Bygg-knappen |

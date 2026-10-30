@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "scan": "tsx packages/cli/src/bin.ts scan"
+    "scan": "tsx packages/cli/src/bin.ts scan",
+    "mapskill": "tsx packages/cli/src/bin.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

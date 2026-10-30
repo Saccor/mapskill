@@ -234,18 +234,28 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
   function stop(reason = 'stop'): Promise<void> {
     if (stopping) return stopping;
     stopping = (async () => {
+      // Each step is guarded on its own, so one failure does not skip the rest.
+      const step = async (name: string, fn: () => unknown): Promise<void> => {
+        try {
+          await fn();
+        } catch (err) {
+          log(`${name} failed: ${String(err)}`);
+        }
+      };
       try {
         log(`stopping: ${reason}`);
         for (const t of timers) clearInterval(t);
+        await step('final drain', () => {
+          queue.flushNow();
+          queue.dispose();
+        });
+        // The final drain can re-arm the cache timer; the explicit saveCache below replaces it.
         if (cacheTimer) clearTimeout(cacheTimer);
-        queue.flushNow();
-        queue.dispose();
-        await watcher?.close();
-        await server.close();
-        saveCache();
-        removeDaemonInfo(root, process.pid);
-      } catch (err) {
-        log(`shutdown error: ${String(err)}`);
+        cacheTimer = undefined;
+        await step('watcher close', () => watcher?.close());
+        await step('server close', () => server.close());
+        await step('cache save', () => saveCache());
+        await step('daemon.json removal', () => removeDaemonInfo(root, process.pid));
       } finally {
         resolveDone(reason);
       }

@@ -22,6 +22,25 @@ vi.mock('@mapskill/core', async (importOriginal) => {
   };
 });
 
+const serverClose = vi.hoisted(() => ({ fail: false }));
+vi.mock('./server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./server')>();
+  return {
+    ...actual,
+    startServer: async (...args: Parameters<typeof actual.startServer>) => {
+      const server = await actual.startServer(...args);
+      return {
+        ...server,
+        // DaemonServer is a plain object (port + methods), so spreading it keeps everything.
+        close: async () => {
+          await server.close();
+          if (serverClose.fail) throw new Error('close exploded');
+        },
+      };
+    },
+  };
+});
+
 const fn = (name: string): string =>
   `export function ${name}(items: number[]) {\n` +
   `  const total = items.reduce((a, b) => a + b, 0);\n` +
@@ -46,6 +65,7 @@ const handles: DaemonHandle[] = [];
 afterEach(async () => {
   drift.fail = false;
   drift.calls = 0;
+  serverClose.fail = false;
   await Promise.all(handles.splice(0).map((h) => h.stop('test done')));
 });
 async function start(root: string, options: DaemonOptions = {}): Promise<DaemonHandle> {
@@ -171,6 +191,36 @@ describe('daemon lifecycle', () => {
     await Promise.all([first, second]);
     await expect(h.done).resolves.toBe('first');
     expect(readDaemonInfo(root)).toBeNull();
+  });
+
+  it('stop() drains pending changes without re-arming the cache timer', async () => {
+    const root = tmpProject(files());
+    // Small cacheSaveMs so a re-armed timer would fire (and rewrite cache.json) within the observation window.
+    const h = await start(root, { watch: false, debounceMs: 60_000, cacheSaveMs: 100 });
+    await h.ready;
+    write(root, 'lib/b.ts', fn('sumB'));
+    await request(h.info, 'POST', '/api/touched', { files: [path.join(root, 'lib/b.ts')], sessionId: 's1' });
+    await h.stop('drain');
+    await expect(h.done).resolves.toBe('drain');
+    const cacheFile = path.join(root, '.mapskill', 'cache.json');
+    expect(Object.keys(readFactsCache(root))).toContain('lib/b.ts');
+    const before = fs.statSync(cacheFile).mtimeMs;
+    await new Promise((r) => setTimeout(r, 300));
+    expect(fs.statSync(cacheFile).mtimeMs).toBe(before);
+  });
+
+  it('stop() runs every teardown step even when one fails', async () => {
+    const root = tmpProject(files());
+    const lines: string[] = [];
+    const h = await start(root, { watch: false, log: (l) => lines.push(l) });
+    await h.ready;
+    fs.rmSync(path.join(root, '.mapskill', 'cache.json'), { force: true });
+    serverClose.fail = true;
+    await h.stop('broken close');
+    await expect(h.done).resolves.toBe('broken close');
+    expect(lines.some((l) => l.includes('server close failed'))).toBe(true);
+    expect(Object.keys(readFactsCache(root))).toContain('lib/a.ts'); // saveCache still ran
+    expect(readDaemonInfo(root)).toBeNull(); // removeDaemonInfo still ran
   });
 
   it('stop() right after start skips loading and leaves no cache or daemon.json', async () => {

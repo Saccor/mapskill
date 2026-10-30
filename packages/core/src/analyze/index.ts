@@ -5,5 +5,6 @@ import { findRuleBreaks } from './rules';
 import { findUnused } from './unused';
 
 export function runAnalyzers(ctx: AnalysisContext): Finding[] {
-  return [...findDuplicates(ctx), ...findUnused(ctx), ...findRuleBreaks(ctx)];
+  const seen = new Set<string>();
+  return [...findDuplicates(ctx), ...findUnused(ctx), ...findRuleBreaks(ctx)].filter((f) => (seen.has(f.id) ? false : (seen.add(f.id), true)));
 }

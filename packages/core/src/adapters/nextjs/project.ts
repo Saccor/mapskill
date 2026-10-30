@@ -5,7 +5,7 @@ export function isNextProject(root: string): boolean {
   const file = path.join(root, 'package.json');
   if (!fs.existsSync(file)) return false;
   try {
-    const pkg = JSON.parse(fs.readFileSync(file, 'utf8')) as {
+    const pkg = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, '')) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };

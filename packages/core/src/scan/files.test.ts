@@ -32,3 +32,15 @@ describe('listSourceFiles', () => {
     expect(listSourceFiles(dir)).toEqual(['a.ts']);
   });
 });
+
+describe('listSourceFiles skip rules', () => {
+  it('skips public/ and root-only dist/build/out, but not nested ones', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-files2-'));
+    const write = (rel: string) => {
+      fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+      fs.writeFileSync(path.join(dir, rel), 'export {};');
+    };
+    for (const rel of ['public/sw.js', 'dist/a.js', 'build/a.js', 'out/a.js', 'src/build/keep.ts', 'src/out/keep2.ts', 'pkg/node_modules/x.ts', 'src/coverage/z.ts', 'src/public/ok.ts']) write(rel);
+    expect(listSourceFiles(dir)).toEqual(['src/build/keep.ts', 'src/out/keep2.ts', 'src/public/ok.ts']);
+  });
+});

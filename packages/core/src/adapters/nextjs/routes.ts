@@ -9,7 +9,7 @@ export interface RouteFile {
 
 export function routeFileInfo(rel: string): RouteFile | null {
   const p = rel.startsWith('src/') ? rel.slice(4) : rel;
-  if (/^middleware\.[cm]?[jt]sx?$/.test(p)) return { kind: 'middleware', route: '/' };
+  if (/^(?:middleware|proxy)\.[cm]?[jt]sx?$/.test(p)) return { kind: 'middleware', route: '/' };
 
   const app = /^app\/(.*?)([^/]+)\.[cm]?[jt]sx?$/.exec(p);
   if (app) {

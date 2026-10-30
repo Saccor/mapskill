@@ -72,3 +72,29 @@ describe('project detection', () => {
     expect(readPrismaModels(dir)).toEqual(['user', 'blogPost']);
   });
 });
+
+describe('Next.js convention files', async () => {
+  const { isNextConventionFile, NEXT_FRAMEWORK_EXPORTS } = await import('./conventions');
+  it.each([
+    'app/page.tsx', 'src/app/icon1.tsx', 'app/apple-icon2.tsx', 'app/blog/opengraph-image3.tsx', 'src/proxy.ts', 'proxy.ts',
+    'middleware.ts', 'src/instrumentation.ts', 'instrumentation-client.ts', 'src/mdx-components.tsx', 'mdx-components.tsx',
+  ])('%s is a convention file', (file) => {
+    expect(isNextConventionFile(file)).toBe(true);
+  });
+  it.each(['lib/proxy.ts', 'lib/icon1.tsx', 'src/lib/x.ts'])('%s is not', (file) => {
+    expect(isNextConventionFile(file)).toBe(false);
+  });
+  it('knows the new framework exports and the proxy route kind', () => {
+    for (const n of ['proxy', 'register', 'onRequestError', 'useMDXComponents', 'GET']) expect(NEXT_FRAMEWORK_EXPORTS.has(n)).toBe(true);
+    expect(routeFileInfo('src/proxy.ts')).toEqual({ kind: 'middleware', route: '/' });
+  });
+});
+
+describe('isTestFile segments', () => {
+  it.each(['test/setup.ts', 'tests/a.ts', 'e2e/home.spec.ts', 'cypress/support/e2e.ts', 'src/__tests__/a.ts', 'src/test/a.ts', 'a/b.test.ts'])('%s', (f) => {
+    expect(isTestFile(f)).toBe(true);
+  });
+  it.each(['src/latest/a.ts', 'lib/contest.ts', 'src/attests/a.ts'])('%s is not a test file', (f) => {
+    expect(isTestFile(f)).toBe(false);
+  });
+});

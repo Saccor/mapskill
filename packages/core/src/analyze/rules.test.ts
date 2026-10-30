@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { scanProject } from '../graph/scan';
-import { fixture } from '../test-helpers';
+import { fixture, tmpProject } from '../test-helpers';
 import { findCycles } from './cycles';
 
 describe('findCycles', () => {
@@ -44,5 +44,17 @@ describe('findRuleBreaks on messy-app', () => {
   it('lowers health for nodes with findings', () => {
     expect(g.health['helper:lib/date-utils.ts#formatDay']).toBeLessThan(10);
     expect(g.health['helper:lib/discount.ts#discountFor']).toBe(9);
+  });
+});
+
+describe('cycles with inline type imports', () => {
+  it('does not report a cycle made only of inline type imports', () => {
+    const root = tmpProject({
+      'package.json': '{"dependencies":{"next":"16"}}',
+      'app/page.tsx': `import { makeA } from '../lib/a'; import { makeB } from '../lib/b'; export default function P() { return <p>{String(makeA() && makeB())}</p>; }`,
+      'lib/a.ts': `import { type B } from './b'; export type A = { b?: B }; export const makeA = (): A => ({});`,
+      'lib/b.ts': `import { type A } from './a'; export type B = { a?: A }; export const makeB = (): B => ({});`,
+    });
+    expect(scanProject(root).findings.filter((f) => f.kind === 'circular-import')).toEqual([]);
   });
 });

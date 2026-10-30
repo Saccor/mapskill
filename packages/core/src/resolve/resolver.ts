@@ -5,6 +5,10 @@ import ts from 'typescript';
 export interface Resolver {
   /** Returns a project-relative path with '/' separators, or null for packages and unresolvable imports. */
   resolve(specifier: string, fromFile: string): string | null;
+  /** Set when tsconfig/jsconfig exists but could not be parsed; resolution then uses the default fallback. */
+  configError?: string;
+  /** Prefixes of tsconfig `paths` keys (e.g. '@/'), used to recognise local-looking specifiers. */
+  pathPrefixes: string[];
 }
 
 function withDefaults(o: ts.CompilerOptions): ts.CompilerOptions {
@@ -17,23 +21,30 @@ function withDefaults(o: ts.CompilerOptions): ts.CompilerOptions {
   };
 }
 
-export function loadCompilerOptions(root: string): ts.CompilerOptions {
+export function loadCompilerOptions(root: string): { options: ts.CompilerOptions; error?: string } {
+  let error: string | undefined;
   for (const name of ['tsconfig.json', 'jsconfig.json']) {
-    const file = path.join(root, name);
+    const file = path.join(root, name).split(path.sep).join('/');
     if (!fs.existsSync(file)) continue;
     const read = ts.readConfigFile(file, ts.sys.readFile);
-    if (read.error) break;
+    if (read.error) {
+      error = ts.flattenDiagnosticMessageText(read.error.messageText, ' ');
+      break;
+    }
     const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, root, undefined, file);
-    return withDefaults(parsed.options);
+    return { options: withDefaults(parsed.options) };
   }
   const target = fs.existsSync(path.join(root, 'src')) ? './src/*' : './*';
-  return withDefaults({ baseUrl: root, paths: { '@/*': [target] } });
+  return { options: withDefaults({ baseUrl: root, paths: { '@/*': [target] } }), error };
 }
 
 export function createResolver(root: string): Resolver {
-  const options = loadCompilerOptions(root);
+  const { options, error } = loadCompilerOptions(root);
+  const pathPrefixes = Object.keys(options.paths ?? {}).map((k) => k.replace(/\*$/, '')).filter((k) => k.length > 0);
   const cache = ts.createModuleResolutionCache(root, (f) => f, options);
   return {
+    configError: error,
+    pathPrefixes,
     resolve(specifier, fromFile) {
       const containing = path.join(root, fromFile);
       const resolved = ts.resolveModuleName(specifier, containing, options, ts.sys, cache).resolvedModule;

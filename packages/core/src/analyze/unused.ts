@@ -1,24 +1,17 @@
 import { isTestFile, isToolingConfig } from '../adapters/file-kinds';
-import { routeFileInfo } from '../adapters/nextjs/routes';
+import { isNextConventionFile, NEXT_FRAMEWORK_EXPORTS } from '../adapters/nextjs/conventions';
 import type { Finding, Framework } from '../model/types';
 import { msg } from '../text/messages';
-import { makeFinding, type AnalysisContext } from './context';
+import { makeFinding, reachabilityCertainty, type AnalysisContext } from './context';
 
-const FRAMEWORK_EXPORTS = new Set([
-  'default', 'metadata', 'generateMetadata', 'generateStaticParams', 'generateViewport', 'viewport',
-  'revalidate', 'dynamic', 'dynamicParams', 'fetchCache', 'runtime', 'preferredRegion', 'maxDuration',
-  'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS',
-  'config', 'middleware', 'getServerSideProps', 'getStaticProps', 'getStaticPaths',
-  'alt', 'size', 'contentType', 'generateImageMetadata', 'generateSitemaps', 'experimental_ppr',
-]);
-
-function isNextMetadataFile(file: string): boolean {
-  return /^(src\/)?app\/(.*\/)?(opengraph-image|twitter-image|icon|apple-icon|sitemap|robots|manifest)\.[cm]?[jt]sx?$/.test(file);
+/** Deno edge functions and Convex backends are run by their platforms, not imported by the app. */
+function isPlatformEntry(file: string): boolean {
+  return /^supabase\/functions\/.+\/index\.[cm]?[jt]sx?$/.test(file) || file.startsWith('convex/');
 }
 
 export function isEntryFile(file: string, framework: Framework): boolean {
-  if (isTestFile(file) || !file.includes('/') || file.startsWith('scripts/') || file.startsWith('prisma/')) return true;
-  if (framework === 'nextjs') return routeFileInfo(file) !== null || isNextMetadataFile(file) || /^(src\/)?instrumentation\.[cm]?[jt]sx?$/.test(file);
+  if (isTestFile(file) || !file.includes('/') || file.startsWith('scripts/') || file.startsWith('prisma/') || isPlatformEntry(file)) return true;
+  if (framework === 'nextjs') return isNextConventionFile(file);
   return /^(src\/)?(index|main|app|server)\.[cm]?[jt]sx?$/.test(file);
 }
 
@@ -33,19 +26,20 @@ export function findUnused(ctx: AnalysisContext): Finding[] {
 
   for (const f of Object.values(ctx.files)) {
     if (isTestFile(f.path) || isToolingConfig(f.path)) continue;
-    const routeFile = ctx.framework === 'nextjs' && (routeFileInfo(f.path) !== null || isNextMetadataFile(f.path));
+    const routeFile = ctx.framework === 'nextjs' && isNextConventionFile(f.path);
+    if (isPlatformEntry(f.path)) continue;
     const used = usedNames.get(f.path) ?? new Set<string>();
     if (used.has('*')) continue;
     for (const e of f.exports) {
       if (e.kind === 'type' || e.kind === 'reexport' || e.name === '*') continue;
-      if (routeFile && FRAMEWORK_EXPORTS.has(e.name)) continue;
+      if (routeFile && NEXT_FRAMEWORK_EXPORTS.has(e.name)) continue;
       if (used.has(e.name)) continue;
-      if (f.functions.some((fn) => fn.refs.includes(e.name))) continue;
+      if (f.fileRefs.includes(e.name) || f.functions.some((fn) => fn.refs.includes(e.name))) continue;
       const fn = f.functions.find((x) => x.exportName === e.name);
       out.push(
         makeFinding(
           'unused-export',
-          'certain',
+          reachabilityCertainty(ctx, f.path),
           [f.path],
           [ctx.owner(f.path, fn?.name)],
           msg.unusedExport(e.name),
@@ -75,7 +69,7 @@ export function findUnused(ctx: AnalysisContext): Finding[] {
     out.push(
       makeFinding(
         'orphan-file',
-        'certain',
+        reachabilityCertainty(ctx, p),
         [p],
         [ctx.owner(p)],
         msg.orphanFile(p),

@@ -1,3 +1,4 @@
+import { isTestFile } from '../adapters/file-kinds';
 import type { Finding } from '../model/types';
 import { msg } from '../text/messages';
 import { makeFinding, type AnalysisContext } from './context';
@@ -15,7 +16,7 @@ export function findRuleBreaks(ctx: AnalysisContext): Finding[] {
       const secrets = f.calls
         .filter((c) => c.kind === 'env' && !c.value.startsWith('NEXT_PUBLIC_') && c.value !== 'NODE_ENV')
         .map((c) => c.value);
-      const packages = f.imports.filter((i) => SERVER_ONLY_PACKAGES.has(i.specifier)).map((i) => i.specifier);
+      const packages = f.imports.filter((i) => !i.typeOnly && SERVER_ONLY_PACKAGES.has(i.specifier)).map((i) => i.specifier);
       const what = [...new Set([...secrets, ...packages])].join(', ');
       if (what) {
         out.push(
@@ -50,7 +51,7 @@ export function findRuleBreaks(ctx: AnalysisContext): Finding[] {
         out.push(
           makeFinding(
             'hardcoded-secret',
-            'certain',
+            isTestFile(f.path) ? 'likely' : 'certain',
             [f.path],
             [nodeId],
             msg.hardcodedSecret(f.path, p.detail ?? ''),

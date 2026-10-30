@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import type { FileFacts, ImportBinding, ImportFact } from '../model/types';
+import { collectCallsAndProblems } from './calls';
 import { sha1 } from '../util/hash';
 import { functionMetrics, type FnNode } from './functions';
 
@@ -128,5 +129,6 @@ export function extractFacts(path: string, text: string, mtimeMs = 0): FileFacts
   for (const fn of facts.functions) {
     if (!fn.exportName && exportedLocals.has(fn.name)) fn.exportName = exportedLocals.get(fn.name);
   }
+  collectCallsAndProblems(sf, facts);
   return facts;
 }

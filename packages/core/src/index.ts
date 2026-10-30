@@ -19,3 +19,4 @@ export {
 } from './graph/project';
 export { createSourceFilter, isSkippedDir, listSourceFiles } from './scan/files';
 export { applyDelta, diffGraphs, isEmptyDelta, toPublicGraph, type GraphDelta, type PublicGraph } from './graph/delta';
+export * from './model/protocol';

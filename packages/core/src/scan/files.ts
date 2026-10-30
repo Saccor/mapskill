@@ -22,11 +22,22 @@ export function isSkippedDir(relDir: string): boolean {
   return relDir.split('/').some((part, i) => SKIP_ANYWHERE.has(part) || (i === 0 && SKIP_AT_ROOT.has(part)));
 }
 
+/** Errors that mean "this folder vanished or cannot be read" while walking a tree that may change underneath us. */
+const SKIPPABLE_DIR_ERRORS = new Set(['ENOENT', 'EPERM', 'EACCES', 'ENOTDIR']);
+
 export function listSourceFiles(root: string): string[] {
   const ig = loadIgnore(root);
   const out: string[] = [];
   const walk = (dirRel: string): void => {
-    for (const entry of fs.readdirSync(path.join(root, dirRel), { withFileTypes: true })) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(path.join(root, dirRel), { withFileTypes: true });
+    } catch (err) {
+      // A subfolder can vanish (or be locked) mid-walk; skip it. The root itself failing is a real error.
+      if (dirRel && SKIPPABLE_DIR_ERRORS.has((err as NodeJS.ErrnoException).code ?? '')) return;
+      throw err;
+    }
+    for (const entry of entries) {
       const rel = dirRel ? `${dirRel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (SKIP_ANYWHERE.has(entry.name) || (!dirRel && SKIP_AT_ROOT.has(entry.name)) || ig.ignores(`${rel}/`)) continue;

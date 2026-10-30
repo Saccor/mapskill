@@ -17,6 +17,6 @@ export {
   type Project,
   type ReadResult,
 } from './graph/project';
-export { createSourceFilter, isSkippedDir, listSourceFiles } from './scan/files';
+export { createIgnoredDirFilter, createSourceFilter, isSkippedDir, listSourceFiles } from './scan/files';
 export { applyDelta, diffGraphs, isEmptyDelta, toPublicGraph, type GraphDelta, type PublicGraph } from './graph/delta';
 export * from './model/protocol';

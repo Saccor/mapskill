@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { fixture } from '../test-helpers';
-import { listSourceFiles } from './files';
+import { createIgnoredDirFilter, listSourceFiles } from './files';
 
 describe('listSourceFiles', () => {
   it('lists code files sorted with forward slashes', () => {
@@ -88,5 +88,20 @@ describe('listSourceFiles on a changing tree', () => {
 describe('listSourceFiles on a missing root', () => {
   it('still throws, so a vanished project is not read as an empty one', () => {
     expect(() => listSourceFiles(path.join(os.tmpdir(), 'mapskill-no-such-root-xyz'))).toThrow(/ENOENT/);
+  });
+});
+
+describe('createIgnoredDirFilter', () => {
+  it('matches skipped folders and folders the .gitignore excludes, never the root or outside paths', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-files4-'));
+    fs.writeFileSync(path.join(dir, '.gitignore'), 'tmp/\n*.log\n');
+    const ignored = createIgnoredDirFilter(dir);
+    expect(ignored('tmp')).toBe(true);
+    expect(ignored('src/tmp')).toBe(true);
+    expect(ignored('node_modules')).toBe(true);
+    expect(ignored('dist')).toBe(true);
+    expect(ignored('lib')).toBe(false);
+    expect(ignored('')).toBe(false);
+    expect(ignored('../x')).toBe(false);
   });
 });

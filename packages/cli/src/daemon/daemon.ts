@@ -80,6 +80,10 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
   let watcher: ProjectWatcher | undefined;
   let cacheTimer: ReturnType<typeof setTimeout> | undefined;
   let stopping: Promise<void> | undefined;
+  /** Set synchronously at the start of stop(), before the final drain (which runs before `stopping` is assigned). */
+  let closing = false;
+  let watcherRestart: Promise<void> | undefined;
+  let restartAgain = false;
   let resolveDone!: (reason: string) => void;
   const done = new Promise<string>((resolve) => {
     resolveDone = resolve;
@@ -110,6 +114,8 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       const current = result.project;
       project = current;
       changedSinceReconcile = true;
+      // A new .gitignore changes which folders the watcher must skip.
+      if (result.reloaded && batch.paths.includes('.gitignore')) restartWatcher();
       if (!result.empty) {
         seq += 1;
         server.broadcast({ type: 'delta', seq, delta: result.delta });
@@ -194,8 +200,8 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
   const info: DaemonInfo = { pid: process.pid, port: server.port, token, version: DAEMON_VERSION, root, startedAt: Date.now() };
   writeDaemonInfo(root, info);
 
-  const ready = loaded.then(async () => {
-    if (options.watch === false || stopping) return;
+  /** Starts the watcher, then queues whatever changed while no watcher was running. */
+  const openWatcher = async (): Promise<void> => {
     const w = await watchProject(
       root,
       (e) => {
@@ -209,12 +215,45 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       },
       (err) => log(`watcher error: ${String(err)}`),
     );
-    if (stopping) {
+    if (closing) {
       await w.close();
       return;
     }
     watcher = w;
     for (const rel of findDrift(project!)) queue.add(rel, 'watcher');
+  };
+  /**
+   * Replaces the watcher so it reads the new .gitignore. Fire and forget: errors are logged, onFlush is not blocked.
+   * Waits for the first watcher, runs one restart at a time, and stops early once the daemon is stopping.
+   */
+  const restartWatcher = (): void => {
+    if (options.watch === false || closing) return;
+    if (watcherRestart) {
+      restartAgain = true; // .gitignore changed again while restarting: restart once more afterwards
+      return;
+    }
+    watcherRestart = (async () => {
+      await ready.catch(() => {});
+      do {
+        restartAgain = false;
+        try {
+          const old = watcher;
+          watcher = undefined;
+          await old?.close();
+          if (closing) return;
+          await openWatcher();
+        } catch (err) {
+          log(`watcher restart failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+        }
+      } while (restartAgain && !closing);
+    })().finally(() => {
+      watcherRestart = undefined;
+    });
+  };
+
+  const ready = loaded.then(async () => {
+    if (options.watch === false || stopping) return;
+    await openWatcher();
   });
   ready.catch((err: unknown) => {
     log(`start failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
@@ -248,6 +287,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
 
   function stop(reason = 'stop'): Promise<void> {
     if (stopping) return stopping;
+    closing = true;
     stopping = (async () => {
       // Each step is guarded on its own, so one failure does not skip the rest.
       const step = async (name: string, fn: () => unknown): Promise<void> => {
@@ -267,7 +307,10 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
         // The final drain can re-arm the cache timer; the explicit saveCache below replaces it.
         if (cacheTimer) clearTimeout(cacheTimer);
         cacheTimer = undefined;
-        await step('watcher close', () => watcher?.close());
+        await step('watcher close', async () => {
+          await watcherRestart; // never rejects; it sees `stopping` and closes what it opened
+          await watcher?.close();
+        });
         await step('server close', () => server.close());
         await step('cache save', () => saveCache());
         await step('daemon.json removal', () => removeDaemonInfo(root, process.pid));

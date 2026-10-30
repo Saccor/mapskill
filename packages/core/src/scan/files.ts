@@ -22,6 +22,18 @@ export function isSkippedDir(relDir: string): boolean {
   return relDir.split('/').some((part, i) => SKIP_ANYWHERE.has(part) || (i === 0 && SKIP_AT_ROOT.has(part)));
 }
 
+/**
+ * True for a project-relative folder Mapskill never reads: a skipped folder or one the project's .gitignore excludes.
+ * Reads .gitignore once, when created. Only folders: files are never ignored here.
+ */
+export function createIgnoredDirFilter(root: string): (relDir: string) => boolean {
+  const ig = loadIgnore(root);
+  return (relDir) => {
+    if (!relDir || relDir === '..' || relDir.startsWith('../') || path.isAbsolute(relDir)) return false;
+    return isSkippedDir(relDir) || ig.ignores(`${relDir}/`);
+  };
+}
+
 /** Errors that mean "this folder vanished or cannot be read" while walking a tree that may change underneath us. */
 const SKIPPABLE_DIR_ERRORS = new Set(['ENOENT', 'EPERM', 'EACCES', 'ENOTDIR']);
 

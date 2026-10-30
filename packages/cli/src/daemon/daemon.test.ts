@@ -131,6 +131,21 @@ describe('startDaemon', () => {
     client.close();
   });
 
+  it('restarts the watcher when .gitignore changes', async () => {
+    const root = tmpProject({ ...files(), '.gitignore': '.mapskill/*\ngen/\n', 'gen/old.ts': 'export const old = 1;\n' });
+    const h = await start(root);
+    await h.ready;
+    const client = await connect(h.info);
+    fs.writeFileSync(path.join(root, '.gitignore'), '.mapskill/*\n');
+    await waitFor(() => h.project()?.facts['gen/old.ts'] !== undefined, 10_000); // reload picked up gen/
+    write(root, 'gen/new.ts', fn('sumNew'));
+    await waitFor(
+      () => client.messages.some((m) => m.type === 'delta' && m.delta.addedNodes.some((n) => n.file === 'gen/new.ts')),
+      10_000,
+    );
+    client.close();
+  }, 30_000);
+
   it('adds .mapskill/ to an existing .gitignore', async () => {
     const root = tmpProject({ ...files(), '.gitignore': 'node_modules\n' });
     await start(root, { watch: false });

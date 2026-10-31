@@ -23,7 +23,7 @@ function Connected({ token }: { token: string }) {
       }),
     [],
   );
-  if (!state.graph) return <p>{state.status}</p>;
+  if (!state.graph || !slots) return <p>{state.status}</p>;
   return (
     <div className="map" style={{ height: '100vh' }}>
       <MapView

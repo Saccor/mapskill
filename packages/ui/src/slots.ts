@@ -48,8 +48,11 @@ export function computeSlots(
   return assignSlots(nodes, restorableSlots(prevSlots, { ...saved, ...lastSaved, ...prevSlots }, nodes));
 }
 
-/** Slots for every part: saved ones from .mapskill/layout.json, new ones assigned and saved after a quiet second. */
-export function useSlots(graph: PublicGraph | null, api: Api): Record<string, number> {
+/**
+ * Slots for every part: saved ones from .mapskill/layout.json, new ones assigned and saved after a quiet second.
+ * Null until the layout load has finished (success or failure): no provisional slots are ever shown or remembered.
+ */
+export function useSlots(graph: PublicGraph | null, api: Api): Record<string, number> | null {
   const [saved, setSaved] = useState<Record<string, number> | null>(null);
   // Everything persisted so far (server file plus saves this session), including parts that are gone for now.
   const lastSaved = useRef<Record<string, number>>({});
@@ -58,43 +61,33 @@ export function useSlots(graph: PublicGraph | null, api: Api): Record<string, nu
   const loadFailed = useRef(false);
   useEffect(() => {
     let cancelled = false;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    const load = (again: boolean) =>
-      api.layout().then(
-        (l) => {
-          if (cancelled) return;
-          loadFailed.current = false;
-          lastSaved.current = { ...l.slots, ...lastSaved.current };
-          setSaved(l.slots);
-        },
-        () => {
-          if (cancelled) return;
-          loadFailed.current = true;
-          setSaved((s) => s ?? {});
-          if (again) retry = setTimeout(() => void load(false), 2000);
-        },
-      );
-    void load(true);
+    api.layout().then(
+      (l) => {
+        if (cancelled) return;
+        lastSaved.current = { ...l.slots };
+        setSaved(l.slots);
+      },
+      () => {
+        if (cancelled) return;
+        loadFailed.current = true;
+        setSaved({});
+      },
+    );
     return () => {
       cancelled = true;
-      clearTimeout(retry);
     };
   }, [api]);
   const slots = useMemo(
-    () =>
-      graph
-        ? computeSlots(graph.nodes, saved ?? {}, lastSaved.current, prevSlots.current)
-        : {},
+    () => (graph && saved ? computeSlots(graph.nodes, saved, lastSaved.current, prevSlots.current) : null),
     [graph, saved],
   );
   useEffect(() => {
-    prevSlots.current = slots;
+    if (slots) prevSlots.current = slots;
   }, [slots]);
   useEffect(() => {
-    if (saved === null || !graph || loadFailed.current) return;
+    if (saved === null || !graph || !slots || loadFailed.current) return;
     if (Object.entries(slots).every(([id, slot]) => lastSaved.current[id] === slot)) return;
     const timer = setTimeout(() => {
-      if (loadFailed.current) return;
       const merged = mergeForSave(lastSaved.current, slots);
       lastSaved.current = merged;
       api.saveLayout(merged).catch(() => {});

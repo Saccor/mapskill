@@ -41,4 +41,7 @@ describe('computeSlots', () => {
     expect(second.y).toBe(0);
     expect(second.w).toBe(1);
   });
+  it('uses the saved slot of a part, with no provisional id-order slots', () => {
+    expect(computeSlots([node('w'), node('y')], { y: 5 }, {}, {})).toEqual({ y: 5, w: 0 });
+  });
 });

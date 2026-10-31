@@ -115,3 +115,58 @@ describe('inheritGhostSlots', () => {
     expect(inheritGhostSlots([page], { 'ghost:pricing-page': 5 }, null)).toEqual({});
   });
 });
+
+describe('inheritGhostSlots in multi-step builds', () => {
+  const item = (over: Partial<GoalStatus['items'][number]>): GoalStatus['items'][number] =>
+    ({ id: 'checkout', title: { en: 'C', sv: 'C' }, why: { en: '', sv: '' }, done: true, zone: 'server', nodeType: 'api-route', matchedNodeIds: [], ...over });
+  const goalOf = (i: GoalStatus['items'][number]): GoalStatus => ({ goalId: 'g', title: { en: 'G', sv: 'G' }, done: 1, total: 1, items: [i] });
+  const ghost = { id: 'ghost:checkout', zone: 'server' as const };
+  const route = { id: 'api-route:app/api/checkout/route.ts', zone: 'server' as const };
+  const other = { id: 'api-route:app/api/other/route.ts', zone: 'server' as const };
+
+  it('moves a fresh part from its fresh slot to the ghost slot and releases the old one', () => {
+    const session = new SlotSession();
+    session.loaded({}, false);
+    const pending = goalOf(item({ done: false, matchedNodeIds: [] }));
+    const s1 = session.compute([other, ghost], pending);
+    expect(Object.keys(s1).sort()).toEqual([ghost.id, other.id].sort());
+    // The route arrives while the ghost is still shown: it gets a fresh slot and nothing else moves.
+    const s2 = session.compute([other, ghost, route], pending);
+    expect(s2[ghost.id]).toBe(s1[ghost.id]);
+    expect(s2[other.id]).toBe(s1[other.id]);
+    expect(s2[route.id]).not.toBe(s1[ghost.id]);
+    const rows = (s: Record<string, number>, ids: string[]) => Math.max(...ids.map((id) => s[id])) + 1;
+    // The item turns done: the ghost is gone and the route takes its place.
+    const done = goalOf(item({ matchedNodeIds: [route.id] }));
+    const s3 = session.compute([other, route], done);
+    expect(s3[route.id]).toBe(s1[ghost.id]);
+    expect(s3[other.id]).toBe(s1[other.id]);
+    expect(rows(s3, [other.id, route.id])).toBe(rows(s1, [other.id, ghost.id]));
+    // And it stays there.
+    expect(session.compute([other, route], done)[route.id]).toBe(s1[ghost.id]);
+  });
+
+  it('never moves a part that was in the layout loaded at session start', () => {
+    const session = new SlotSession();
+    session.loaded({ [route.id]: 3 }, false);
+    const s1 = session.compute([ghost, route], goalOf(item({ done: false })));
+    const s2 = session.compute([route], goalOf(item({ matchedNodeIds: [route.id] })));
+    expect(s2[route.id]).toBe(s1[route.id]);
+    expect(s2[route.id]).toBe(3);
+  });
+
+  it('makes the table the heir of a table item', () => {
+    const table = { id: 'table:subscriptions', zone: 'data' as const };
+    const page = { id: 'page:app/x/page.tsx', zone: 'pages' as const };
+    const g = goalOf(item({ id: 'subscriptions-table', zone: 'data', nodeType: 'table', matchedNodeIds: [table.id, page.id] }));
+    expect(inheritGhostSlots([table, page], { 'ghost:subscriptions-table': 4 }, g)).toEqual({ [table.id]: 4 });
+  });
+
+  it('lets the first matched part without a held slot inherit', () => {
+    const a = { id: 'api-route:a', zone: 'server' as const };
+    const b = { id: 'api-route:b', zone: 'server' as const };
+    const g = goalOf(item({ matchedNodeIds: [a.id, b.id] }));
+    expect(inheritGhostSlots([a, b], { 'ghost:checkout': 4, [a.id]: 1 }, g)).toEqual({ [b.id]: 4 });
+    expect(inheritGhostSlots([a, b], { 'ghost:checkout': 4 }, g)).toEqual({ [a.id]: 4 });
+  });
+});

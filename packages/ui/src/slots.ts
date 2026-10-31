@@ -45,13 +45,18 @@ export function restorableSlots(
 
 /**
  * When a goal item is done, the part that satisfied it takes over the slot its ghost had, so the map does not
- * grow or shift. Only for a part with no slot yet, in the ghost's zone, and only if no present part holds that slot.
+ * grow or shift. The ghost's slot must be free: no present part holds it. The heir is the first matched part in
+ * the ghost's zone that either has no slot yet, or has one but was first seen in this session while a ghost was
+ * shown (`fresh`, never a part from the layout loaded at session start). That covers multi-step builds, where
+ * the route appears before the item turns done. Such a part moves once, from its fresh slot to the ghost's slot;
+ * its old slot is released and no other part moves.
  * Returns extra remembered slots to merge in.
  */
 export function inheritGhostSlots(
   nodes: { id: string; zone: Zone }[],
   remembered: Record<string, number>,
   goal: GoalStatus | null,
+  fresh: ReadonlySet<string> = new Set(),
 ): Record<string, number> {
   const out: Record<string, number> = {};
   if (!goal) return out;
@@ -64,8 +69,11 @@ export function inheritGhostSlots(
     if (slot === undefined) continue;
     const key = `${item.zone}:${slot}`;
     if (held.has(key)) continue;
-    const heir = item.matchedNodeIds.map((id) => byId.get(id)).find((n) => n && n.zone === item.zone && !(n.id in remembered));
+    const heir = item.matchedNodeIds
+      .map((id) => byId.get(id))
+      .find((n) => n && n.zone === item.zone && (!(n.id in remembered) || fresh.has(n.id)));
     if (!heir) continue;
+    if (heir.id in remembered) held.delete(`${heir.zone}:${remembered[heir.id]}`);
     out[heir.id] = slot;
     held.add(key);
   }
@@ -79,9 +87,10 @@ export function computeSlots(
   lastSaved: Record<string, number>,
   prevSlots: Record<string, number>,
   goal: GoalStatus | null = null,
+  fresh: ReadonlySet<string> = new Set(),
 ): Record<string, number> {
   const remembered = { ...saved, ...lastSaved, ...prevSlots };
-  return assignSlots(nodes, restorableSlots(prevSlots, { ...remembered, ...inheritGhostSlots(nodes, remembered, goal) }, nodes));
+  return assignSlots(nodes, restorableSlots(prevSlots, { ...remembered, ...inheritGhostSlots(nodes, remembered, goal, fresh) }, nodes));
 }
 
 /** The slot bookkeeping of one map session, free of React so the sequence of loads and saves can be tested. */
@@ -90,6 +99,9 @@ export class SlotSession {
   private lastSaved: Record<string, number> = {};
   private savedLayout: Record<string, number> = {};
   private prevSlots: Record<string, number> = {};
+  /** Parts first seen after the first compute, while a ghost was shown, and not in the layout loaded at session start. */
+  private freshWithGhost = new Set<string>();
+  private computed = false;
 
   /** The layout file was read. After a degraded start the provisional slots are dropped, so the map switches to the saved layout. */
   loaded(layout: Record<string, number>, afterDegraded: boolean): void {
@@ -99,7 +111,13 @@ export class SlotSession {
   }
 
   compute(nodes: { id: string; zone: Zone }[], goal: GoalStatus | null = null): Record<string, number> {
-    this.prevSlots = computeSlots(nodes, this.savedLayout, this.lastSaved, this.prevSlots, goal);
+    if (this.computed && nodes.some((n) => n.id.startsWith(GHOST_PREFIX))) {
+      for (const n of nodes) {
+        if (!(n.id in this.prevSlots) && !(n.id in this.savedLayout) && !n.id.startsWith(GHOST_PREFIX)) this.freshWithGhost.add(n.id);
+      }
+    }
+    this.computed = true;
+    this.prevSlots = computeSlots(nodes, this.savedLayout, this.lastSaved, this.prevSlots, goal, this.freshWithGhost);
     return this.prevSlots;
   }
 

@@ -36,7 +36,6 @@ test('the SaaS goal shows the four missing parts as ghosts, and Build reaches Cl
 test('building a missing part turns its ghost into a real part without moving the others', async ({ page }) => {
   await page.goto(app.url);
   await expect(page.locator('[data-node-id="ghost:pricing-page"]')).toBeVisible(); // the goal is remembered in .mapskill/goal.yaml
-  await page.waitForTimeout(1500); // let the first fit settle
   const boxes = async () => {
     const out: Record<string, { x: number; y: number }> = {};
     for (const el of await page.locator('[data-node-id]:not([data-node-id^="ghost:"])').all()) {
@@ -45,11 +44,21 @@ test('building a missing part turns its ghost into a real part without moving th
     }
     return out;
   };
+  // Let the first fit settle: two consecutive reads of every box must agree.
+  await expect
+    .poll(async () => {
+      const a = JSON.stringify(await boxes());
+      await page.waitForTimeout(150);
+      return a === JSON.stringify(await boxes());
+    }, { timeout: 10_000 })
+    .toBe(true);
   const before = await boxes();
+  const ghostBox = (await page.locator('[data-node-id="ghost:pricing-page"]').boundingBox())!;
   fs.mkdirSync(path.join(app.root, 'app', 'pricing'), { recursive: true });
   fs.writeFileSync(path.join(app.root, 'app', 'pricing', 'page.tsx'), 'export default function Pricing() {\n  return <main>Prices</main>;\n}\n');
   await expect(page.locator('[data-node-id="page:app/pricing/page.tsx"]')).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('[data-node-id="ghost:pricing-page"]')).toHaveCount(0);
   const after = await boxes();
   for (const [id, pos] of Object.entries(before)) expect(after[id], id).toEqual(pos);
+  expect(after['page:app/pricing/page.tsx']).toEqual({ x: Math.round(ghostBox.x), y: Math.round(ghostBox.y) });
 });

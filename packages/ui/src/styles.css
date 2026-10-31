@@ -92,7 +92,8 @@ button { font: inherit; color: inherit; }
 .error { margin: 8px 16px 0; padding: 8px; border: 1px solid var(--warn); border-radius: 6px; color: var(--warn); }
 .activity { display: flex; gap: 16px; align-items: center; padding: 6px 16px; border-top: 1px solid var(--border); background: var(--panel); font-size: 0.9rem; position: relative; }
 .pending button { border: 1px solid var(--accent); border-radius: 6px; background: none; padding: 2px 8px; cursor: pointer; color: var(--accent); }
-.pending-list { position: absolute; bottom: 100%; left: 16px; margin: 0; padding: 8px; list-style: none; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; max-width: 560px; }
+.pending-list { position: absolute; bottom: 100%; left: 16px; margin: 0; padding: 8px; list-style: none; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; max-width: 560px; max-height: 50vh; overflow: auto; }
 .pending-list li { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
 .pending-list li span { flex: 1; }
 .credit { margin-left: auto; color: var(--muted); font-size: 0.8em; }
+.app > .error { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); z-index: 10; margin: 0; background: var(--panel); max-width: 90vw; }

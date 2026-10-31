@@ -32,6 +32,7 @@ function loadHighlighter(): Promise<Highlighter | null> {
 
 export function CodeView({ api, file, start, lang }: { api: Api; file: string; start: number; lang: Lang }) {
   const [lines, setLines] = useState<string[] | null>(null);
+  const [first, setFirst] = useState(start);
   const [html, setHtml] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -43,6 +44,7 @@ export function CodeView({ api, file, start, lang }: { api: Api; file: string; s
       async (answer) => {
         if (!alive) return;
         setLines(answer.lines);
+        setFirst(answer.start);
         const h = await loadHighlighter();
         if (!alive || !h) return;
         const language = file.endsWith('.tsx') || file.endsWith('.jsx') ? 'tsx' : 'typescript';
@@ -60,13 +62,13 @@ export function CodeView({ api, file, start, lang }: { api: Api; file: string; s
   }, [api, file, start]);
   if (failed) return <p className="muted">{t(lang, 'codeFailed')}</p>;
   if (!lines) return <p className="muted">{t(lang, 'codeLoading')}</p>;
-  // Shiki's HTML is generated locally from our own source text and escapes it; it carries no scripts.
-  if (html) return <div className="code" style={{ counterReset: `line ${start - 1}` }} dangerouslySetInnerHTML={{ __html: html }} />;
+  // The input is the user's own project source; Shiki escapes token text, so the generated HTML cannot carry markup or scripts.
+  if (html) return <div className="code" style={{ counterReset: `line ${first - 1}` }} dangerouslySetInnerHTML={{ __html: html }} />;
   return (
     <pre className="code plain">
       {lines.map((l, i) => (
         <div key={i}>
-          <span className="ln">{start + i}</span>
+          <span className="ln">{first + i}</span>
           {l}
         </div>
       ))}

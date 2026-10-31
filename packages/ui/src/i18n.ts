@@ -43,6 +43,7 @@ const EN = {
   cancel: 'Cancel',
   requestQueued: 'Queued for Claude',
   lockFailed: 'Could not change the lock: {error}',
+  lockedByFolder: 'Locked through a folder lock — unlock the folder instead.',
   actionFailed: 'That did not work: {error}',
   unreadable: 'Could not read: {files}',
 } as const;
@@ -90,6 +91,7 @@ const SV: Record<StringKey, string> = {
   cancel: 'Avbryt',
   requestQueued: 'Väntar på Claude',
   lockFailed: 'Kunde inte ändra låset: {error}',
+  lockedByFolder: 'Låst genom ett mapplås — lås upp mappen i stället.',
   actionFailed: 'Det gick inte: {error}',
   unreadable: 'Kunde inte läsas: {files}',
 };

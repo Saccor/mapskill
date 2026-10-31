@@ -1,6 +1,6 @@
 import type { Finding, MapNode, PublicGraph } from '@mapskill/core/client';
-import { useState } from 'react';
-import type { Api } from '../api';
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, type Api } from '../api';
 import { NODE_TYPE_TEXT, t, type Lang } from '../i18n';
 import { NODE_ICON } from '../icons';
 import { explainText, fixText } from '../requests';
@@ -19,11 +19,21 @@ export interface SidePanelProps {
 
 export function SidePanel({ graph, node, locked, lang, api, onSelect, onError }: SidePanelProps) {
   const [copied, setCopied] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    heading.current?.focus();
+    return () => clearTimeout(copyTimer.current);
+  }, []);
   const findings: Finding[] = findingsByNode(graph)[node.id] ?? [];
   const { usedBy, uses } = related(graph, node.id);
   const health = graph.health[node.id] ?? 10;
   const fail = (key: 'actionFailed' | 'lockFailed') => (err: unknown) =>
-    onError(t(lang, key, { error: err instanceof Error ? err.message : String(err) }));
+    onError(
+      key === 'lockFailed' && err instanceof ApiError && err.status === 409
+        ? t(lang, 'lockedByFolder')
+        : t(lang, key, { error: err instanceof Error ? err.message : String(err) }),
+    );
 
   const list = (items: MapNode[]) =>
     items.length === 0 ? (
@@ -41,9 +51,9 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError }:
     );
 
   return (
-    <aside className="panel" aria-label={node.label} onKeyDown={(e) => e.key === 'Escape' && onSelect(null)}>
+    <aside className="panel" aria-label={node.label}>
       <header className="panel-head">
-        <h2>
+        <h2 ref={heading} tabIndex={-1}>
           <span aria-hidden="true">{NODE_ICON[node.type]}</span> {node.label}
         </h2>
         <span className="muted">{NODE_TYPE_TEXT[node.type].name[lang]}</span>
@@ -72,7 +82,8 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError }:
           onClick={() =>
             navigator.clipboard.writeText(explainText(node, lang)).then(() => {
               setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
+              clearTimeout(copyTimer.current);
+              copyTimer.current = setTimeout(() => setCopied(false), 2000);
             }, fail('actionFailed'))
           }
         >

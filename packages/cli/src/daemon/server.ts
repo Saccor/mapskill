@@ -18,6 +18,7 @@ import type {
   StopAnswer,
 } from '@mapskill/core';
 import { WebSocket, WebSocketServer } from 'ws';
+import { isStaticRequest, serveStatic } from './static';
 
 export interface FindingsQuery {
   since?: string;
@@ -34,6 +35,8 @@ export interface FindingsAnswer {
 
 export interface ServerDeps {
   token: string;
+  /** The built map view's folder; null when it is not built. */
+  uiDir: string | null;
   status(): DaemonStatus;
   graph(): Promise<PublicGraph>;
   /** First message for a client that said hello: the full graph. */
@@ -151,6 +154,8 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
 
   async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     if (!allowedHost(req.headers.host)) throw new HttpError(403, 'forbidden host');
+    const pathname = (req.url ?? '/').split('?')[0];
+    if (isStaticRequest(req.method, pathname)) return serveStatic(deps.uiDir, req, res, pathname);
     if (!sameToken(req.headers['x-mapskill-token'], deps.token)) throw new HttpError(401, 'missing or wrong token');
     deps.activity();
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);

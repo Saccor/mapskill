@@ -55,6 +55,25 @@ describe('hooks with a daemon', () => {
     for (const event of ['user-prompt-submit', 'post-tool-use', 'stop']) expect(log).toContain(`${event}: skipped: no time left`);
   });
 
+  it('user-prompt-submit hands queued map requests to Claude once', async () => {
+    const root = project();
+    const h = await daemon(root);
+    await request(h.info, 'POST', '/api/requests', { kind: 'explain', text: 'Explain sumA in plain words' });
+    const first = await run('user-prompt-submit', root, { prompt: 'go' });
+    const out = JSON.parse(first.stdout!) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
+    expect(out.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
+    expect(out.hookSpecificOutput.additionalContext).toContain('1. Explain sumA in plain words');
+    expect(await run('user-prompt-submit', root, { prompt: 'again' })).toEqual({ exitCode: 0 });
+  });
+
+  it('session-start gives Claude the map address', async () => {
+    const root = project();
+    const h = await daemon(root);
+    const r = await run('session-start', root, { source: 'startup' });
+    const ctx = (JSON.parse(r.stdout!) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
+    expect(ctx).toContain(`http://127.0.0.1:${h.info.port}/?t=${h.info.token}`);
+  });
+
   it('session-start returns context with the locks', async () => {
     const root = project();
     await daemon(root);
@@ -131,10 +150,10 @@ describe('formatStopReason', () => {
 
 describe('sessionContext fallbacks', () => {
   it('says so when the daemon did not start', () => {
-    expect(sessionContext(false, [])).toContain('could not start');
+    expect(sessionContext(null, [])).toContain('could not start');
   });
 
   it('says so when locks.json cannot be read', () => {
-    expect(sessionContext(true, null)).toContain('cannot read .mapskill/locks.json');
+    expect(sessionContext({ port: 1, token: 't' }, null)).toContain('cannot read .mapskill/locks.json');
   });
 });

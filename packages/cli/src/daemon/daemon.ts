@@ -26,6 +26,7 @@ import { ensureGitignore, ensureMapskillDir } from './paths';
 import { ChangeQueue, type ChangeBatch } from './queue';
 import { RequestQueue } from './requests';
 import { HttpError, startServer } from './server';
+import { findUiDir } from './ui-dir';
 import { readDismissed, readLayout, writeDismissed, writeLayout } from './state-files';
 import { TurnTracker } from './turns';
 import { watchProject, type ProjectWatcher } from './watcher';
@@ -50,6 +51,8 @@ export interface DaemonOptions {
   cacheSaveMs?: number;
   /** False runs without a file watcher (changes then only arrive through /api/touched). Default true. */
   watch?: boolean;
+  /** Folder with the built map view. Undefined looks for it; null serves none. */
+  uiDir?: string | null;
   log?: (line: string) => void;
 }
 
@@ -171,6 +174,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
 
   const server = await startServer({
     token,
+    uiDir: options.uiDir === undefined ? findUiDir() : options.uiDir,
     status: (): DaemonStatus => ({
       ok: true,
       root,

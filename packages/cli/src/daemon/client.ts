@@ -75,6 +75,10 @@ export async function liveDaemon(root: string): Promise<DaemonInfo | null> {
 
 let selfEntry: string | undefined;
 
+export function getSelfEntry(): string | undefined {
+  return selfEntry;
+}
+
 /** Registers the file this CLI runs from (the bundle sets it), so a spawned daemon runs the same code. */
 export function setSelfEntry(file: string | undefined): void {
   selfEntry = file;

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { tmpProject } from '@mapskill/core/test-helpers';
 import { describe, expect, it } from 'vitest';
-import { MAX_LAYOUT_ENTRIES, mergeLayout, readDismissed, readLayout, writeDismissed, writeLayout } from './state-files';
+import { MAX_LAYOUT_ENTRIES, mergeLayout, readDismissed, readGoalId, readLayout, writeDismissed, writeGoalId, writeLayout } from './state-files';
 
 describe('state files', () => {
   it('round-trips dismissed findings and layout', () => {
@@ -13,6 +13,17 @@ describe('state files', () => {
     writeLayout(r, { version: 1, slots: { 'page:app/page.tsx': 0, 'helper:lib/a.ts#a': 3 } });
     expect(readDismissed(r)).toEqual({ 'exact-duplicate:abc': 'hash1' });
     expect(readLayout(r).slots).toEqual({ 'page:app/page.tsx': 0, 'helper:lib/a.ts#a': 3 });
+  });
+
+  it('reads, writes and clears the goal', () => {
+    const r = tmpProject({ 'package.json': '{}' });
+    expect(readGoalId(r)).toBeNull();
+    writeGoalId(r, 'saas-auth-payments');
+    expect(fs.readFileSync(path.join(r, '.mapskill', 'goal.yaml'), 'utf8')).toBe('goal: saas-auth-payments\n');
+    expect(readGoalId(r)).toBe('saas-auth-payments');
+    writeGoalId(r, null);
+    expect(fs.existsSync(path.join(r, '.mapskill', 'goal.yaml'))).toBe(false);
+    writeGoalId(r, null); // removing twice is fine
   });
 
   it('drops invalid entries', () => {

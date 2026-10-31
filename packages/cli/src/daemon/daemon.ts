@@ -3,15 +3,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   applyFileChanges,
+  evaluateGoal,
   findDrift,
   findingCodeHash,
+  findGoal,
   findSimilar,
+  goalSummaries,
   loadProject,
   mapOverview,
   nodeDetails,
   setDismissed,
   toPublicGraph,
   type DaemonStatus,
+  type GoalStatus,
   type LocksAnswer,
   type Project,
   type PublicGraph,
@@ -27,7 +31,7 @@ import { ChangeQueue, type ChangeBatch } from './queue';
 import { RequestQueue } from './requests';
 import { HttpError, startServer } from './server';
 import { findUiDir } from './ui-dir';
-import { mergeLayout, readDismissed, readLayout, writeDismissed, writeLayout } from './state-files';
+import { mergeLayout, readDismissed, readGoalId, readLayout, writeDismissed, writeGoalId, writeLayout } from './state-files';
 import { TurnTracker } from './turns';
 import { watchProject, type ProjectWatcher } from './watcher';
 
@@ -80,6 +84,10 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
   /** Recently changed project paths with the time they were applied, oldest first. */
   const recentChanges: { path: string; at: number }[] = [];
   let project: Project | undefined;
+  let goalId: string | null = null;
+  let goalStatus: GoalStatus | null = null;
+  /** Set once startServer has returned: until then there is nothing to broadcast to. */
+  let serverReady = false;
   let seq = 0;
   let lastActivity = Date.now();
   let changedSinceReconcile = false;
@@ -143,6 +151,35 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       changedSinceReconcile = true; // let the drift check recover a failed batch
       log(`update failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     }
+    refreshGoal();
+  };
+  const goalFileExists = (rel: string): boolean => {
+    const p = path.posix.normalize(rel.split('\\').join('/'));
+    if (path.posix.isAbsolute(p) || path.win32.isAbsolute(p) || p === '..' || p.startsWith('../') || p.startsWith('.mapskill/')) return false;
+    return fs.existsSync(path.join(root, p));
+  };
+  /** A broken template (for example an extends cycle) must never take the daemon down: it counts as no goal. */
+  const safeFindGoal = (id: string): ReturnType<typeof findGoal> => {
+    try {
+      return findGoal(id);
+    } catch (err) {
+      log(`goal ${id} is unusable: ${String(err)}`);
+      return null;
+    }
+  };
+  /** Recomputes the goal status; pushes it when it changed. */
+  const refreshGoal = (): void => {
+    if (!project || !serverReady) return;
+    let next: GoalStatus | null = null;
+    try {
+      const template = goalId ? safeFindGoal(goalId) : null;
+      next = template ? evaluateGoal(template, toPublicGraph(project.graph), goalFileExists) : null;
+    } catch (err) {
+      log(`goal evaluation failed: ${String(err)}`);
+    }
+    if (JSON.stringify(next) === JSON.stringify(goalStatus)) return;
+    goalStatus = next;
+    server.broadcast({ type: 'goal', status: goalStatus });
   };
   const queue = new ChangeQueue(onFlush, options.debounceMs ?? 200);
 
@@ -153,6 +190,10 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     project = loadProject(root, readFactsCache(root), readDismissed(root));
     saveCache();
     log(`loaded ${Object.keys(project.facts).length} files in ${Date.now() - started} ms`);
+    const saved = readGoalId(root);
+    if (saved !== null && !safeFindGoal(saved)) log(`unknown goal in goal.yaml: ${saved}`);
+    else goalId = saved;
+    refreshGoal();
   })();
   loaded.catch(() => {}); // `ready` reports load failures; this avoids an unhandled rejection if startServer fails first
   const currentFindingIds = (): string[] => project?.graph.findings.map((f) => f.id) ?? [];
@@ -298,6 +339,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       const visible = new Set(project.graph.findings.map((f) => f.id));
       const kept = Object.fromEntries(Object.entries(project.dismissed).filter(([id]) => !visible.has(id)));
       project.dismissed = kept;
+      refreshGoal();
       // Broadcast first: the graph already changed, so clients must not miss the delta if the write fails.
       if (!result.empty) {
         seq += 1;
@@ -308,6 +350,20 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       } catch (err) {
         log(`dismissed.json write failed: ${String(err)}`);
       }
+    },
+    goal: async () => {
+      await loaded;
+      queue.flushNow();
+      refreshGoal();
+      return { goals: goalSummaries(), status: goalStatus };
+    },
+    setGoal: async (id) => {
+      await loaded;
+      if (id !== null && !safeFindGoal(id)) throw new HttpError(404, 'no such goal');
+      goalId = id;
+      writeGoalId(root, id);
+      refreshGoal();
+      return { goals: goalSummaries(), status: goalStatus };
     },
     layout: async () => readLayout(root),
     saveLayout: async (slots) => writeLayout(root, { version: 1, slots: mergeLayout(readLayout(root).slots, slots) }),
@@ -335,6 +391,9 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       lastActivity = Date.now();
     },
   });
+
+  serverReady = true;
+  refreshGoal();
 
   const info: DaemonInfo = { pid: process.pid, port: server.port, token, version: DAEMON_VERSION, root, startedAt: Date.now() };
   writeDaemonInfo(root, info);

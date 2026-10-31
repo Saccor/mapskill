@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import type { Finding, SimilarMatch } from '@mapskill/core';
+import type { Finding, GoalAnswer, GoalStatus, SimilarMatch } from '@mapskill/core';
 import { z } from 'zod';
 import { DaemonRequestError, ensureDaemon, request } from '../daemon/client';
 import { DAEMON_VERSION, type DaemonInfo } from '../daemon/info';
@@ -33,6 +33,24 @@ export function formatMatches(matches: SimilarMatch[]): string {
 export function formatFindings(findings: Finding[]): string {
   if (findings.length === 0) return 'No new findings in the current turn.';
   return findings.map((f) => `- [${f.certainty}] ${f.message.en}\n  What to do: ${f.instruction}`).join('\n');
+}
+
+export function formatGoalGaps(status: GoalStatus | null): string {
+  if (!status) return 'No goal is chosen in the Mapskill map. The user can pick one at the top of the map.';
+  const missing = status.items.filter((i) => !i.done);
+  const lines = [`Goal: ${status.title.en} (${status.done}/${status.total} done).`];
+  if (missing.length === 0) lines.push('Missing: nothing.');
+  else {
+    lines.push('Missing:');
+    for (const i of missing) {
+      lines.push(
+        `- ${i.title.en}${i.nodeType ? ` [${i.nodeType}]` : ''} — ${i.why.en}${i.suggestPath ? ` Suggested place: ${i.suggestPath}.` : ''}`,
+      );
+    }
+  }
+  const done = status.items.filter((i) => i.done);
+  if (done.length > 0) lines.push('Done:', ...done.map((i) => `- ${i.title.en}`));
+  return lines.join('\n');
 }
 
 export function createMcpServer(options: { root: string; daemon: () => Promise<DaemonInfo | null> }): McpServer {
@@ -113,6 +131,20 @@ export function createMcpServer(options: { root: string; daemon: () => Promise<D
       withDaemon(async (info) => {
         const { findings } = await request<{ findings: Finding[] }>(info, 'GET', '/api/findings?session=latest&touchedOnly=true', undefined, 10_000);
         return ok(formatFindings(findings));
+      }),
+  );
+
+  server.registerTool(
+    'goal_gaps',
+    {
+      description:
+        'What the goal the user chose in the Mapskill map still misses (for example a login page or a checkout endpoint), with a suggested place for each. Call it before suggesting what to build next.',
+      inputSchema: {},
+    },
+    async () =>
+      withDaemon(async (info) => {
+        const { status } = await request<GoalAnswer>(info, 'GET', '/api/goal', undefined, 10_000);
+        return ok(formatGoalGaps(status));
       }),
   );
 

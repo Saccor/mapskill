@@ -1,4 +1,5 @@
-import type { LayoutFile } from '@mapskill/core';
+import fs from 'node:fs';
+import { formatGoalFile, parseGoalFile, type LayoutFile } from '@mapskill/core';
 import { ensureMapskillDir, mapskillPath, readJson, writeJsonAtomic } from './paths';
 
 export function readDismissed(root: string): Record<string, string> {
@@ -20,6 +21,25 @@ export function readLayout(root: string): LayoutFile {
     if (typeof slot === 'number' && Number.isInteger(slot) && slot >= 0) slots[id] = slot;
   }
   return { version: 1, slots };
+}
+
+/** The goal chosen in the map (.mapskill/goal.yaml); null when there is none or the file cannot be read. */
+export function readGoalId(root: string): string | null {
+  try {
+    return parseGoalFile(fs.readFileSync(mapskillPath(root, 'goal.yaml'), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+export function writeGoalId(root: string, id: string | null): void {
+  const file = mapskillPath(root, 'goal.yaml');
+  if (id === null) {
+    fs.rmSync(file, { force: true });
+    return;
+  }
+  ensureMapskillDir(root);
+  fs.writeFileSync(file, formatGoalFile(id));
 }
 
 /** Most slots kept in layout.json: a full save of this size still fits the 1 MB request body limit. */

@@ -6,6 +6,7 @@ import type {
   ClientMessage,
   DaemonStatus,
   Finding,
+  GoalAnswer,
   LayoutFile,
   LocksAnswer,
   MapRequest,
@@ -70,6 +71,10 @@ export interface ServerDeps {
   claimRequests(sessionId: string): Promise<MapRequest[]>;
   /** Hides a finding until the code behind it changes; throws HttpError 404 for unknown findings. */
   dismiss(findingId: string): Promise<void>;
+  /** The available goals and the status of the chosen one (null when none is chosen). */
+  goal(): Promise<GoalAnswer>;
+  /** Chooses a goal, or clears it with null; throws HttpError 404 for an unknown id. */
+  setGoal(goalId: string | null): Promise<GoalAnswer>;
   /** The saved slot of each map node. */
   layout(): Promise<LayoutFile>;
   saveLayout(slots: Record<string, number>): Promise<void>;
@@ -89,7 +94,7 @@ export interface DaemonServer {
 
 const MAX_BODY_BYTES = 1_000_000;
 const MAX_SNIPPET_CHARS = 20_000;
-const REQUEST_KINDS = new Set(['explain', 'fix', 'custom']);
+const REQUEST_KINDS = new Set(['explain', 'fix', 'custom', 'build']);
 
 export class HttpError extends Error {
   constructor(
@@ -232,7 +237,7 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
         return send(res, 200, { requests: await deps.requests() });
       case 'POST /api/requests': {
         const body = await readBody(req);
-        if (!REQUEST_KINDS.has(body.kind as string)) throw new HttpError(400, 'kind must be explain, fix or custom');
+        if (!REQUEST_KINDS.has(body.kind as string)) throw new HttpError(400, 'kind must be explain, fix, custom or build');
         const input = {
           kind: body.kind as RequestKind,
           text: requiredString(body.text, 'text'),
@@ -258,6 +263,13 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
         const body = await readBody(req);
         await deps.dismiss(requiredString(body.findingId, 'findingId'));
         return send(res, 200, { ok: true });
+      }
+      case 'GET /api/goal':
+        return send(res, 200, await deps.goal());
+      case 'POST /api/goal': {
+        const body = await readBody(req);
+        if (body.goalId !== null && typeof body.goalId !== 'string') throw new HttpError(400, 'goalId must be a string or null');
+        return send(res, 200, await deps.setGoal(body.goalId as string | null));
       }
       case 'GET /api/layout':
         return send(res, 200, await deps.layout());

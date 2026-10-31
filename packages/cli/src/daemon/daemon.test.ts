@@ -1,7 +1,8 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { DaemonStatus, Finding, PublicGraph } from '@mapskill/core';
-import { generateProject, tmpProject } from '@mapskill/core/test-helpers';
+import { fixture, generateProject, tmpProject } from '@mapskill/core/test-helpers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { connect, waitFor } from '../test-utils';
 import { readFactsCache } from './cache';
@@ -59,6 +60,12 @@ const files = (): Record<string, string> => ({
 const write = (root: string, rel: string, text: string): void => {
   fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
   fs.writeFileSync(path.join(root, rel), text);
+};
+
+const copyFixture = (name: string): string => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `mapskill-${name}-`));
+  fs.cpSync(fixture(name), dir, { recursive: true, filter: (src) => !src.split(path.sep).includes('.mapskill') });
+  return dir;
 };
 
 const handles: DaemonHandle[] = [];
@@ -446,5 +453,65 @@ describe('startDaemon root', () => {
     const root = fs.realpathSync.native(tmpProject(files()));
     const h = await start(root.toUpperCase(), { watch: false });
     expect(h.info.root).toBe(root);
+  });
+});
+
+describe('goals', () => {
+  it('evaluates the chosen goal, pushes changes and remembers the choice', async () => {
+    const root = copyFixture('half-saas');
+    const h = await start(root, { watch: false });
+    const client = await connect(h.info);
+    type Answer = { goals: { id: string }[]; status: { goalId: string; done: number; total: number; items: { id: string; done: boolean }[] } | null };
+    const first = await request<Answer>(h.info, 'GET', '/api/goal');
+    expect(first.goals.map((g) => g.id)).toContain('saas-auth-payments');
+    expect(first.status).toBeNull();
+
+    const chosen = await request<Answer>(h.info, 'POST', '/api/goal', { goalId: 'saas-auth-payments' });
+    expect(chosen.status!.items.filter((i) => !i.done).map((i) => i.id)).toEqual(['pricing-page', 'checkout', 'webhook', 'subscriptions-table']);
+    await waitFor(() => client.messages.some((m) => m.type === 'goal' && m.status?.goalId === 'saas-auth-payments'));
+
+    write(root, 'app/pricing/page.tsx', 'export default function Pricing() {\n  return <main>Prices</main>;\n}\n');
+    await request(h.info, 'POST', '/api/touched', { files: [path.join(root, 'app/pricing/page.tsx')] });
+    await request(h.info, 'GET', '/api/graph'); // flushes the queue
+    await waitFor(() => client.messages.some((m) => m.type === 'goal' && m.status?.items.find((i) => i.id === 'pricing-page')?.done === true));
+
+    await expect(request(h.info, 'POST', '/api/goal', { goalId: 'nope' })).rejects.toMatchObject({ status: 404 });
+    await expect(request(h.info, 'POST', '/api/goal', { goalId: 3 })).rejects.toMatchObject({ status: 400 });
+    client.close();
+    await h.stop('restart');
+    const h2 = await start(root, { watch: false });
+    expect((await request<Answer>(h2.info, 'GET', '/api/goal')).status?.goalId).toBe('saas-auth-payments');
+    await request(h2.info, 'POST', '/api/goal', { goalId: null });
+    expect(fs.existsSync(path.join(root, '.mapskill', 'goal.yaml'))).toBe(false);
+  });
+
+  it('counts a non-source file for fileExists checks and refuses paths outside the project', async () => {
+    const root = copyFixture('half-saas');
+    fs.rmSync(path.join(root, '.env.example'));
+    const h = await start(root, { watch: false });
+    type Answer = { status: { items: { id: string; done: boolean }[] } | null };
+    const before = await request<Answer>(h.info, 'POST', '/api/goal', { goalId: 'webapp-auth' });
+    expect(before.status!.items.find((i) => i.id === 'env-example')!.done).toBe(false);
+    write(root, '.env.example', 'X=\n');
+    await request(h.info, 'POST', '/api/touched', { files: [path.join(root, '.env.example')] });
+    const after = await request<Answer>(h.info, 'GET', '/api/goal');
+    expect(after.status!.items.find((i) => i.id === 'env-example')!.done).toBe(true);
+  });
+
+  it('treats an unknown goal in goal.yaml as no goal and logs it', async () => {
+    const root = copyFixture('half-saas');
+    write(root, '.mapskill/goal.yaml', 'goal: does-not-exist\n');
+    const lines: string[] = [];
+    const h = await start(root, { watch: false, log: (l) => lines.push(l) });
+    const answer = await request<{ status: unknown }>(h.info, 'GET', '/api/goal');
+    expect(answer.status).toBeNull();
+    expect(lines.some((l) => l.includes('unknown goal in goal.yaml: does-not-exist'))).toBe(true);
+  });
+
+  it('queues build requests', async () => {
+    const root = tmpProject(files());
+    const h = await start(root, { watch: false });
+    const { request: r } = await request<{ request: { kind: string } }>(h.info, 'POST', '/api/requests', { kind: 'build', text: 'Add a pricing page.' });
+    expect(r.kind).toBe('build');
   });
 });

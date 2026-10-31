@@ -5,7 +5,7 @@ import { ensureMapskillDir, mapskillPath, readJson, writeJsonAtomic } from './pa
 export const MAX_REQUEST_CHARS = 2000;
 export const MAX_REQUESTS = 200;
 const FILE = 'requests.json';
-const KINDS: RequestKind[] = ['explain', 'fix', 'custom'];
+const KINDS: RequestKind[] = ['explain', 'fix', 'custom', 'build'];
 
 function valid(r: unknown): r is MapRequest {
   const x = r as MapRequest;

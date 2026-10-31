@@ -64,6 +64,8 @@ export function fakeDeps(over: Partial<ServerDeps> = {}) {
     dismiss: async (findingId) => {
       calls.dismiss.push(findingId);
     },
+    goal: async () => ({ goals: [], status: null }),
+    setGoal: async () => ({ goals: [], status: null }),
     layout: async () => ({ version: 1, slots: {} }),
     saveLayout: async (slots) => {
       calls.saveLayout.push(slots);

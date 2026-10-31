@@ -1,9 +1,10 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { tmpProject } from '@mapskill/core/test-helpers';
+import { fixture, tmpProject } from '@mapskill/core/test-helpers';
 import { afterEach, describe, expect, it } from 'vitest';
 import { request, selfCommand } from '../daemon/client';
 import { startDaemon, type DaemonHandle } from '../daemon/daemon';
@@ -37,11 +38,25 @@ async function connect(root: string, daemon: () => Promise<{ port: number; token
 const text = (r: unknown): string => ((r as { content: { type: string; text: string }[] }).content[0]?.text ?? '');
 
 describe('MCP server', () => {
-  it('lists the four tools', async () => {
+  it('lists the five tools', async () => {
     const root = canonicalRoot(tmpProject({ 'package.json': '{}' }));
     const client = await connect(root, async () => null);
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['find_similar', 'map_overview', 'node_details', 'turn_findings']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['find_similar', 'goal_gaps', 'map_overview', 'node_details', 'turn_findings']);
+  });
+
+  it('goal_gaps lists what the chosen goal still misses', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-half-saas-'));
+    fs.cpSync(fixture('half-saas'), root, { recursive: true, filter: (src) => !src.split(path.sep).includes('.mapskill') });
+    const h = await startDaemon(root, { watch: false });
+    handles.push(h);
+    const client = await connect(root, async () => h.info);
+    expect(text(await client.callTool({ name: 'goal_gaps', arguments: {} }))).toContain('No goal is chosen');
+    await request(h.info, 'POST', '/api/goal', { goalId: 'saas-auth-payments' });
+    const gaps = text(await client.callTool({ name: 'goal_gaps', arguments: {} }));
+    expect(gaps).toMatch(/^Goal: SaaS with login and payments \(\d+\/\d+ done\)\./);
+    expect(gaps).toContain('- Checkout endpoint [api-route] — Customers need a way to start a payment. Suggested place: app/api/checkout/route.ts.');
+    expect(gaps).toContain('Done:\n- Home page');
   });
 
   it('answers from a running daemon', async () => {
@@ -95,7 +110,7 @@ describe('mapskill mcp over stdio', () => {
     const client = new Client({ name: 'test', version: '0.0.0' });
     await client.connect(transport);
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(4);
+    expect(tools).toHaveLength(5);
     await client.close();
   }, 30_000);
 });

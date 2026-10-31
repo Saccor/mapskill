@@ -32,7 +32,11 @@ describe('project paths', () => {
       expect(toProjectRel(root, path.join(link, 'newdir', 'deep', 'x.ts'))).toBe('newdir/deep/x.ts');
       expect(toProjectRel(root, path.join(link, '..', 'x.ts'))).toBeNull();
     } finally {
-      fs.rmSync(link, { recursive: true, force: true });
+      try {
+        fs.unlinkSync(link);
+      } catch {
+        fs.rmdirSync(link);
+      }
     }
   });
 

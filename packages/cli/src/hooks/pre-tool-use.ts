@@ -3,7 +3,7 @@ import path from 'node:path';
 import { findLock, readLocks } from '../locks';
 import { findProjectRoot, toProjectRel } from '../project-path';
 import { editedFile } from './input';
-import { ALLOW, type HookHandler, type HookResult } from './run';
+import { ALLOW, type HookHandler, type HookResult } from './types';
 
 function check(root: string, file: string): HookResult | null {
   const rel = toProjectRel(root, file);
@@ -23,7 +23,7 @@ function check(root: string, file: string): HookResult | null {
     exitCode: 2,
     stderr:
       `The user locked "${lock.label ?? lock.path}" in Mapskill, and ${rel} is part of it. Do not change it. ` +
-      `Ask the user first. To unlock, the user can run "mapskill unlock ${lock.path}" from the Mapskill folder, ` +
+      `Ask the user first. To unlock, the user can run "mapskill unlock ${lock.path}" in the project folder, ` +
       `or remove the entry from .mapskill/locks.json.\n`,
   };
 }

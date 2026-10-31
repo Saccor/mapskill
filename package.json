@@ -11,7 +11,7 @@
     "build:ui": "pnpm --filter @mapskill/ui build",
     "scan": "tsx packages/cli/src/bin.ts scan",
     "mapskill": "tsx packages/cli/src/bin.ts",
-    "build:plugin": "tsx packages/cli/src/build/bundle.ts plugin/dist"
+    "build:plugin": "pnpm build:ui && tsx packages/cli/src/build/bundle.ts plugin/dist"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

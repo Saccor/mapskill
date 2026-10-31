@@ -8,10 +8,13 @@ export interface BundleReport {
   entry: string;
   /** Source files (paths as esbuild reports them, '/' separators) loaded when `mapskill hook` runs. */
   hookClosureInputs: string[];
+  /** True when the map view was copied to <outdir>/ui. */
+  ui: boolean;
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../..');
+const DEFAULT_UI_DIR = path.join(repoRoot, 'packages', 'ui', 'dist');
 
 /** Output files reachable from `start` through static imports only. */
 function staticClosure(meta: Metafile, start: string): Set<string> {
@@ -26,8 +29,8 @@ function staticClosure(meta: Metafile, start: string): Set<string> {
   return seen;
 }
 
-/** Bundles the CLI into `outdir`: mapskill.mjs plus chunks/, loadable by plain node without node_modules. */
-export async function bundlePlugin(outdirArg: string): Promise<BundleReport> {
+/** Bundles the CLI into `outdir`: mapskill.mjs plus chunks/ (and ui/ when the map view is built), loadable by plain node without node_modules. `uiDir: null` skips the map view. */
+export async function bundlePlugin(outdirArg: string, options: { uiDir?: string | null } = {}): Promise<BundleReport> {
   const outdir = path.resolve(outdirArg);
   fs.rmSync(outdir, { recursive: true, force: true });
   const result = await build({
@@ -66,7 +69,10 @@ export async function bundlePlugin(outdirArg: string): Promise<BundleReport> {
   if (!hookOut) throw new Error('bundle has no chunk for the hooks');
   const outputs = new Set([...staticClosure(meta, entryOut), ...staticClosure(meta, hookOut)]);
   const hookClosureInputs = [...outputs].flatMap((o) => Object.keys(meta.outputs[o].inputs)).sort();
-  return { entry: path.resolve(repoRoot, entryOut), hookClosureInputs: hookClosureInputs.map((p) => rel(path.resolve(repoRoot, p))) };
+  const uiDir = options.uiDir === undefined ? DEFAULT_UI_DIR : options.uiDir;
+  const ui = uiDir !== null && fs.existsSync(path.join(uiDir, 'index.html'));
+  if (ui) fs.cpSync(uiDir, path.join(outdir, 'ui'), { recursive: true });
+  return { entry: path.resolve(repoRoot, entryOut), hookClosureInputs: hookClosureInputs.map((p) => rel(path.resolve(repoRoot, p))), ui };
 }
 
 // `tsx packages/cli/src/build/bundle.ts <outdir>`

@@ -76,3 +76,34 @@ describe('plugin bundle', () => {
     expect(fs.readFileSync(path.join(repo, 'plugin', 'skills', 'mapskill', 'SKILL.md'), 'utf8')).toMatch(/^---\nname: mapskill\n/);
   });
 });
+
+describe('plugin bundle with the map view', () => {
+  let out: string;
+  let withUi: BundleReport;
+  const roots: string[] = [];
+
+  beforeAll(async () => {
+    const ui = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-fake-ui-'));
+    fs.writeFileSync(path.join(ui, 'index.html'), '<!doctype html><title>Fake map</title>');
+    out = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-bundle-ui-'));
+    withUi = await bundlePlugin(out, { uiDir: ui });
+  }, 120_000);
+
+  afterAll(() => {
+    for (const r of roots) spawnSync(process.execPath, [withUi.entry, 'stop', r], { timeout: 20_000 });
+    fs.rmSync(out, { recursive: true, force: true });
+  });
+
+  it('copies the map view next to the bundle and the bundled daemon serves it', async () => {
+    expect(withUi.ui).toBe(true);
+    expect(fs.existsSync(path.join(out, 'ui', 'index.html'))).toBe(true);
+    const root = tmpProject({ 'package.json': '{}', 'lib/a.ts': 'export const a = 1;\n' });
+    roots.push(root);
+    const r = spawnSync(process.execPath, [withUi.entry, 'open', root, '--no-browser'], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, MAPSKILL_UI_DIR: '' } });
+    expect(r.status).toBe(0);
+    const url = /Mapskill map: (\S+)/.exec(r.stdout)![1];
+    const page = await fetch(url);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('Fake map');
+  }, 60_000);
+});

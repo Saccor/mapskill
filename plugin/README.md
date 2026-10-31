@@ -27,3 +27,11 @@ Eller kör den paketerade filen inifrån projektmappen, då går en relativ sök
     node <sökväg till repot>/plugin/dist/mapskill.mjs lock <sökväg>
 
 Lås tas bort med `unlock` i stället för `lock`, eller genom att du tar bort raden i `.mapskill/locks.json`.
+
+## Kartan
+
+Öppna kartan i webbläsaren från ditt projekt:
+
+    node <sökväg till repot>/plugin/dist/mapskill.mjs open
+
+Claude får också kartans adress när sessionen startar och kan ge dig den.

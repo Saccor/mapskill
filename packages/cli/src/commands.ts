@@ -34,19 +34,21 @@ export async function runDaemonCommand(dir: string, write: Write = stderr): Prom
     return 0;
   }
   const stamp = (line: string): void => write(`[${new Date().toISOString()}] ${line}\n`);
-  const handle = await (async () => {
-    try {
-      return await startDaemon(root, { log: stamp });
-    } finally {
-      releaseStartLock(root);
-    }
-  })();
-  stamp(`listening on http://127.0.0.1:${handle.info.port}`);
+  let handle: Awaited<ReturnType<typeof startDaemon>> | undefined;
+  let signalled = false;
   const onSignal = (): void => {
-    void handle.stop('signal');
+    signalled = true;
+    void handle?.stop('signal');
   };
   process.once('SIGINT', onSignal);
   process.once('SIGTERM', onSignal);
+  try {
+    handle = await startDaemon(root, { log: stamp });
+  } finally {
+    releaseStartLock(root);
+  }
+  if (signalled) void handle.stop('signal');
+  stamp(`listening on http://127.0.0.1:${handle.info.port}`);
   stamp(`stopped (${await handle.done})`);
   return 0;
 }

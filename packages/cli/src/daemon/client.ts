@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { DaemonStatus } from '@mapskill/core';
-import { isPidAlive, readDaemonInfo, type DaemonInfo } from './info';
+import { DAEMON_VERSION, isPidAlive, readDaemonInfo, type DaemonInfo } from './info';
 import { ensureMapskillDir, mapskillPath } from './paths';
 
 export class DaemonRequestError extends Error {
@@ -60,16 +60,30 @@ export async function pingDaemon(info: DaemonInfo, timeoutMs = 1500): Promise<Da
 export async function liveDaemon(root: string): Promise<DaemonInfo | null> {
   const info = readDaemonInfo(root);
   if (!info || !isPidAlive(info.pid)) return null;
+  if (info.version !== DAEMON_VERSION) {
+    // An older or newer Mapskill: its API may differ. Ask it to stop; ensureDaemon then starts this version.
+    try {
+      await request(info, 'POST', '/api/shutdown', undefined, 1000);
+    } catch {
+      // it may hang or be gone; the new daemon replaces daemon.json and the old one stops when it notices
+    }
+    return null;
+  }
   if (await pingDaemon(info)) return info;
   return Date.now() - info.startedAt < STARTUP_GRACE_MS ? info : null;
 }
 
-/** How to run this CLI again: node + bin.js, or node + tsx loader + bin.ts during development. */
+let selfEntry: string | undefined;
+
+/** Registers the file this CLI runs from (the bundle sets it), so a spawned daemon runs the same code. */
+export function setSelfEntry(file: string | undefined): void {
+  selfEntry = file;
+}
+
+/** How to run this CLI again: node + the entry file, with the tsx loader when it is TypeScript. */
 export function selfCommand(): { command: string; args: string[] } {
-  const here = fileURLToPath(import.meta.url);
-  const ext = path.extname(here);
-  const bin = path.join(path.dirname(here), '..', `bin${ext}`);
-  if (ext === '.ts') {
+  const bin = selfEntry ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', `bin${path.extname(fileURLToPath(import.meta.url))}`);
+  if (path.extname(bin) === '.ts') {
     const loader = createRequire(import.meta.url).resolve('tsx');
     return { command: process.execPath, args: ['--import', pathToFileURL(loader).href, bin] };
   }

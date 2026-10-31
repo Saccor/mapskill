@@ -76,4 +76,16 @@ describe('start lock', () => {
     expect(acquireStartLock(root)).toBe(true);
     releaseStartLock(root);
   });
+
+  it('treats a just-created empty lock as held until it is stale', () => {
+    const root = tmpProject({ 'package.json': '{}' });
+    fs.mkdirSync(path.join(root, '.mapskill'), { recursive: true });
+    const file = path.join(root, '.mapskill', 'daemon.lock');
+    fs.writeFileSync(file, '');
+    expect(acquireStartLock(root)).toBe(false);
+    const old = new Date(Date.now() - 20_000);
+    fs.utimesSync(file, old, old);
+    expect(acquireStartLock(root)).toBe(true);
+    releaseStartLock(root);
+  });
 });

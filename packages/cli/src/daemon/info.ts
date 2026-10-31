@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { ensureMapskillDir, mapskillPath, readJson, writeJsonAtomic } from './paths';
 
-export const DAEMON_VERSION = '0.1.0';
+export const DAEMON_VERSION = '0.2.0';
 
 /** Contents of .mapskill/daemon.json: how other processes find the running daemon. */
 export interface DaemonInfo {
@@ -53,11 +53,17 @@ export function acquireStartLock(root: string, staleMs = 10_000): boolean {
     if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return false;
   }
   try {
-    const holder = Number(fs.readFileSync(file, 'utf8').trim());
+    const text = fs.readFileSync(file, 'utf8').trim();
     const age = Date.now() - fs.statSync(file).mtimeMs;
-    if (holder !== process.pid && isPidAlive(holder) && age < staleMs) return false;
+    const holder = Number(text);
+    // An empty or half-written lock was just created by another process that has not written its pid yet.
+    if (!Number.isInteger(holder) || holder <= 0) {
+      if (age < staleMs) return false;
+    } else if (holder !== process.pid && isPidAlive(holder) && age < staleMs) {
+      return false;
+    }
   } catch {
-    // unreadable lock: take it over
+    // the lock vanished or cannot be read: take it over
   }
   fs.writeFileSync(file, String(process.pid));
   return true;

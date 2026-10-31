@@ -6,7 +6,8 @@ import { tmpProject } from '@mapskill/core/test-helpers';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runStatus, runStop } from '../commands';
 import { waitFor } from '../test-utils';
-import { ensureDaemon, pingDaemon, spawnDaemon } from './client';
+import { ensureDaemon, liveDaemon, pingDaemon, selfCommand, setSelfEntry, spawnDaemon } from './client';
+import { startDaemon } from './daemon';
 import { DAEMON_VERSION, isPidAlive, readDaemonInfo, writeDaemonInfo } from './info';
 
 const deadPid = (): number => spawnSync(process.execPath, ['-e', '0']).pid!;
@@ -105,5 +106,31 @@ describe('CLI commands', () => {
     let out = '';
     expect(await runStatus('/definitely/not/here', (s) => (out += s))).toBe(1);
     expect(out).toContain('Not a folder');
+  });
+});
+
+describe('version check', () => {
+  it('retires a daemon that runs another version', async () => {
+    const root = project();
+    const handle = await startDaemon(root, { watch: false });
+    writeDaemonInfo(root, { ...handle.info, version: '0.0.1' });
+    expect(await liveDaemon(root)).toBeNull();
+    expect(await handle.done).toBe('shutdown request');
+  });
+
+  it('keeps a daemon that runs this version', async () => {
+    const root = project();
+    const handle = await startDaemon(root, { watch: false });
+    expect((await liveDaemon(root))?.pid).toBe(process.pid);
+    await handle.stop('test done');
+  });
+});
+
+describe('selfCommand', () => {
+  it('uses the registered entry file', () => {
+    setSelfEntry(path.join(os.tmpdir(), 'bundle', 'mapskill.mjs'));
+    expect(selfCommand()).toEqual({ command: process.execPath, args: [path.join(os.tmpdir(), 'bundle', 'mapskill.mjs')] });
+    setSelfEntry(undefined);
+    expect(selfCommand().args.at(-1)).toMatch(/bin\.ts$/);
   });
 });

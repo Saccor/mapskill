@@ -9,11 +9,13 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p packages/ui/tsconfig.json --noEmit",
     "build:ui": "pnpm --filter @mapskill/ui build",
+    "test:e2e": "pnpm build:ui && playwright test -c packages/ui/playwright.config.ts",
     "scan": "tsx packages/cli/src/bin.ts scan",
     "mapskill": "tsx packages/cli/src/bin.ts",
     "build:plugin": "pnpm build:ui && tsx packages/cli/src/build/bundle.ts plugin/dist"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/node": "^22.10.0",
     "esbuild": "^0.28.2",
     "tsx": "^4.20.0",

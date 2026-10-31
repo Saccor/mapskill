@@ -130,7 +130,7 @@ describe('formatGoalGaps', () => {
   it('lists done items after Missing: nothing', () => {
     expect(formatGoalGaps(status([item({ done: true })], 1))).toBe('Goal: Goal (1/1 done).\nMissing: nothing.\nDone:\n- Thing');
   });
-  it('has no Done section when nothing is done', () => {
+  it('shows the node type and suggested place of a missing item', () => {
     expect(formatGoalGaps(status([item({ nodeType: 'page', suggestPath: 'app/a/page.tsx' })], 0))).toBe(
       'Goal: Goal (0/1 done).\nMissing:\n- Thing [page] — Because. Suggested place: app/a/page.tsx.',
     );

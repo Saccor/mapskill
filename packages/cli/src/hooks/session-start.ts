@@ -1,7 +1,7 @@
 // packages/cli/src/hooks/session-start.ts
 import { ensureDaemon } from '../daemon/client';
 import { readLocks, type Lock } from '../locks';
-import { ALLOW, type HookHandler } from './run';
+import { ALLOW, timeLeft, type HookHandler } from './run';
 
 export function sessionContext(running: boolean, locks: Lock[] | null): string {
   const lines = [
@@ -17,9 +17,10 @@ export function sessionContext(running: boolean, locks: Lock[] | null): string {
 }
 
 /** Starts the daemon and tells Claude that Mapskill is there and what is locked. */
-export const sessionStart: HookHandler = async ({ root, jsProject }) => {
+export const sessionStart: HookHandler = async (ctx) => {
+  const { root, jsProject } = ctx;
   if (!jsProject) return ALLOW;
-  const info = await ensureDaemon(root, { timeoutMs: 3000 });
+  const info = await ensureDaemon(root, { timeoutMs: Math.max(0, Math.min(3000, timeLeft(ctx) - 1500)) });
   const read = readLocks(root);
   const additionalContext = sessionContext(info !== null, read.ok ? read.locks : null);
   return { exitCode: 0, stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext } }) };

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { addLocks } from '../locks';
 import { canonicalRoot } from '../project-path';
 import { editedFile, hookRoot, isJsProject, readHookInput } from './input';
-import { runHook, type HookHandler } from './run';
+import { runHook, timeLeft, type HookHandler } from './run';
 
 const stdin = (value: unknown): Readable => Readable.from([typeof value === 'string' ? value : JSON.stringify(value)]);
 const env = (root: string): NodeJS.ProcessEnv => ({ CLAUDE_PROJECT_DIR: root });
@@ -92,6 +92,33 @@ describe('runHook', () => {
     expect(await runHook('user-prompt-submit', { stdin: stdin({}), env: env(root) }, { 'user-prompt-submit': hang })).toEqual({ exitCode: 0 });
     expect(Date.now() - started).toBeLessThan(6000);
     expect(fs.readFileSync(path.join(root, '.mapskill', 'log.txt'), 'utf8')).toMatch(/user-prompt-submit: timed out/);
+  }, 10_000);
+
+  it('gives handlers an absolute deadline and a time budget', async () => {
+    const root = project();
+    let seen: { deadline: number; left: number } | undefined;
+    const spy: HookHandler = async (ctx) => {
+      seen = { deadline: ctx.deadline, left: timeLeft(ctx) };
+      return { exitCode: 0 };
+    };
+    const before = Date.now();
+    await runHook('pre-tool-use', { stdin: stdin({}), env: env(root) }, { 'pre-tool-use': spy });
+    expect(seen!.deadline).toBeGreaterThanOrEqual(before + 3900);
+    expect(seen!.deadline).toBeLessThanOrEqual(Date.now() + 4000);
+    expect(seen!.left).toBeLessThanOrEqual(4000);
+    expect(seen!.left).toBeGreaterThan(0);
+  });
+
+  it('counts a stalled stdin inside the deadline', async () => {
+    const root = project();
+    const stalled = new Readable({ read() {} });
+    const quick: HookHandler = async () => ({ exitCode: 0 });
+    const started = Date.now();
+    expect(await runHook('pre-tool-use', { stdin: stalled, env: env(root) }, { 'pre-tool-use': quick })).toEqual({ exitCode: 0 });
+    const elapsed = Date.now() - started;
+    expect(elapsed).toBeLessThan(4500);
+    expect(elapsed).toBeGreaterThanOrEqual(900);
+    expect(elapsed).toBeLessThan(1800); // stdin limit is min(2000, 4000 / 4) = 1000 ms
   }, 10_000);
 
   it('logs nothing outside a JS project and rejects unknown events', async () => {

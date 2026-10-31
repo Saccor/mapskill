@@ -35,6 +35,7 @@ export async function readHookInput(
     }
     return Buffer.concat(chunks).toString('utf8');
   })();
+  read.catch(() => {}); // when the timeout wins, a later stream error must not become an unhandled rejection
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<string>((resolve) => {
     timer = setTimeout(() => resolve(''), options.timeoutMs ?? 2000);

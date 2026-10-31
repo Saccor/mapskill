@@ -18,6 +18,8 @@ export interface HookContext {
   root: string;
   jsProject: boolean;
   env: NodeJS.ProcessEnv;
+  /** Absolute epoch ms by which the hook's work must be done. Counts from before stdin is read. */
+  deadline: number;
 }
 
 export type HookHandler = (ctx: HookContext) => Promise<HookResult>;
@@ -35,6 +37,11 @@ const DEADLINE_MS: Record<HookEvent, number> = {
   'post-tool-use': 4000,
   stop: 12_000,
 };
+
+/** Milliseconds of this hook's budget still free, minus a margin for answering. Never negative. */
+export function timeLeft(ctx: HookContext, marginMs = 300): number {
+  return Math.max(0, ctx.deadline - Date.now() - marginMs);
+}
 
 const isEvent = (e: string): e is HookEvent => (HOOK_EVENTS as readonly string[]).includes(e);
 
@@ -57,16 +64,17 @@ export async function runHook(
 ): Promise<HookResult> {
   if (!isEvent(event)) return { exitCode: 1, stderr: `Unknown hook event: ${event}. Expected one of ${HOOK_EVENTS.join(', ')}.\n` };
   const handler = handlers[event];
-  const input = await readHookInput(io.stdin);
+  const deadline = Date.now() + DEADLINE_MS[event];
+  const input = await readHookInput(io.stdin, { timeoutMs: Math.min(2000, DEADLINE_MS[event] / 4) });
   const root = hookRoot(input, io.env);
   if (!handler) return ALLOW;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timedOut = Symbol('timeout');
   try {
     const result = await Promise.race([
-      handler({ input, root, jsProject: isJsProject(root), env: io.env }),
+      handler({ input, root, jsProject: isJsProject(root), env: io.env, deadline }),
       new Promise<typeof timedOut>((resolve) => {
-        timer = setTimeout(() => resolve(timedOut), DEADLINE_MS[event]);
+        timer = setTimeout(() => resolve(timedOut), Math.max(0, deadline - Date.now()));
       }),
     ]);
     if (result === timedOut) {

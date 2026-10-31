@@ -10,6 +10,7 @@ import { startDaemon, type DaemonHandle } from '../daemon/daemon';
 import { addLocks } from '../locks';
 import { canonicalRoot } from '../project-path';
 import { runHook } from './run';
+import { sessionContext } from './session-start';
 import { formatStopReason } from './stop';
 
 const body = (name: string): string =>
@@ -109,5 +110,15 @@ describe('formatStopReason', () => {
     expect(text).toContain('1. Problem 1\n   What to do: Fix 1');
     expect(text).toContain('(2 more not shown');
     expect(formatStopReason({ ...answer, total: 1, findings: [f(1)] })).toContain('found 1 new problem in');
+  });
+});
+
+describe('sessionContext fallbacks', () => {
+  it('says so when the daemon did not start', () => {
+    expect(sessionContext(false, [])).toContain('could not start');
+  });
+
+  it('says so when locks.json cannot be read', () => {
+    expect(sessionContext(true, null)).toContain('cannot read .mapskill/locks.json');
   });
 });

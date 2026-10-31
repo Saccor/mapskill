@@ -1,7 +1,7 @@
 // packages/cli/src/hooks/stop.ts
 import type { StopAnswer } from '@mapskill/core';
 import { liveDaemon, request } from '../daemon/client';
-import { ALLOW, type HookHandler } from './run';
+import { ALLOW, timeLeft, type HookHandler } from './run';
 
 export function formatStopReason(answer: StopAnswer): string {
   const n = answer.total;
@@ -14,11 +14,14 @@ export function formatStopReason(answer: StopAnswer): string {
 }
 
 /** Before Claude ends its turn: block once with the new certain findings in the files Claude changed. */
-export const stop: HookHandler = async ({ input, root, jsProject }) => {
+export const stop: HookHandler = async (ctx) => {
+  const { input, root, jsProject } = ctx;
   if (input.stop_hook_active === true || !jsProject) return ALLOW;
   const info = await liveDaemon(root);
   if (!info) return ALLOW;
-  const answer = await request<StopAnswer>(info, 'POST', '/api/stop', { sessionId: input.session_id ?? 'default' }, 8000);
+  const t = Math.min(8000, timeLeft(ctx));
+  if (t < 200) return ALLOW;
+  const answer = await request<StopAnswer>(info, 'POST', '/api/stop', { sessionId: input.session_id ?? 'default' }, t);
   if (answer.findings.length === 0) return ALLOW;
   return { exitCode: 0, stdout: JSON.stringify({ decision: 'block', reason: formatStopReason(answer) }) };
 };

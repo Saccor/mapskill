@@ -1,12 +1,15 @@
 // packages/cli/src/hooks/user-prompt-submit.ts
 import { ensureDaemon, request } from '../daemon/client';
-import { ALLOW, type HookHandler } from './run';
+import { ALLOW, timeLeft, type HookHandler } from './run';
 
 /** Marks the start of a turn, so the Stop hook knows which findings are new. Restarts an idle-stopped daemon. */
-export const userPromptSubmit: HookHandler = async ({ input, root, jsProject }) => {
+export const userPromptSubmit: HookHandler = async (ctx) => {
+  const { input, root, jsProject } = ctx;
   if (!jsProject) return ALLOW;
-  const info = await ensureDaemon(root, { timeoutMs: 2000 });
+  const info = await ensureDaemon(root, { timeoutMs: Math.min(2000, timeLeft(ctx) / 2) });
   if (!info) return ALLOW;
-  await request(info, 'POST', '/api/turn', { sessionId: input.session_id ?? 'default' }, 3000);
+  const t = timeLeft(ctx);
+  if (t < 200) return ALLOW;
+  await request(info, 'POST', '/api/turn', { sessionId: input.session_id ?? 'default' }, t);
   return ALLOW;
 };

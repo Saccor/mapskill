@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -62,6 +64,14 @@ describe('MCP server', () => {
 
     await request(h.info, 'POST', '/api/turn', { sessionId: 's1' });
     expect(text(await client.callTool({ name: 'turn_findings', arguments: {} }))).toContain('No new findings');
+    // A duplicate appears in a file Claude did not touch: not reported. Once touched, it is, with its certainty label.
+    fs.writeFileSync(path.join(root, 'lib', 'b.ts'), body('sumB'));
+    fs.writeFileSync(path.join(root, 'lib', 'c.ts'), 'export const c = 1;\n');
+    await request(h.info, 'POST', '/api/touched', { files: ['lib/c.ts'], sessionId: 's1' });
+    expect(text(await client.callTool({ name: 'turn_findings', arguments: {} }))).toContain('No other file uses c');
+    expect(text(await client.callTool({ name: 'turn_findings', arguments: {} }))).not.toContain('sumB');
+    await request(h.info, 'POST', '/api/touched', { files: ['lib/b.ts'], sessionId: 's1' });
+    expect(text(await client.callTool({ name: 'turn_findings', arguments: {} }))).toMatch(/\[(certain|likely)\].*sumB/);
   });
 
   it('says so when Mapskill is not running or the folder is not a JS project', async () => {

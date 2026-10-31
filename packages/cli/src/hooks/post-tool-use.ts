@@ -1,6 +1,7 @@
 // packages/cli/src/hooks/post-tool-use.ts
 import { liveDaemon, request } from '../daemon/client';
 import { editedFile } from './input';
+import { logHookProblem } from './log';
 import { ALLOW, timeLeft, type HookHandler } from './run';
 
 /** Tells the daemon which file Claude just changed (or that a Bash command may have changed files). */
@@ -13,7 +14,10 @@ export const postToolUse: HookHandler = async (ctx) => {
   const info = await liveDaemon(root);
   if (!info) return ALLOW;
   const t = timeLeft(ctx);
-  if (t < 200) return ALLOW;
+  if (t < 200) {
+    logHookProblem(root, 'post-tool-use', 'skipped: no time left');
+    return ALLOW;
+  }
   await request(
     info,
     'POST',

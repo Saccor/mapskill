@@ -9,7 +9,10 @@ import { request } from '../daemon/client';
 import { startDaemon, type DaemonHandle } from '../daemon/daemon';
 import { addLocks } from '../locks';
 import { canonicalRoot } from '../project-path';
-import { runHook } from './run';
+import { runHook, type HookContext } from './run';
+import { postToolUse } from './post-tool-use';
+import { stop } from './stop';
+import { userPromptSubmit } from './user-prompt-submit';
 import { sessionContext } from './session-start';
 import { formatStopReason } from './stop';
 
@@ -39,6 +42,18 @@ async function daemon(root: string): Promise<DaemonHandle> {
 }
 
 describe('hooks with a daemon', () => {
+  it('logs a line when a hook skips its request for lack of time', async () => {
+    const root = project();
+    await daemon(root);
+    const ctx = (input: HookContext['input']): HookContext => ({ input, root, jsProject: true, env: {}, deadline: Date.now() });
+    const edited = { tool_name: 'Write', tool_input: { file_path: path.join(root, 'lib', 'a.ts') } };
+    expect(await userPromptSubmit(ctx({ session_id: 's1' }))).toEqual({ exitCode: 0 });
+    expect(await postToolUse(ctx(edited))).toEqual({ exitCode: 0 });
+    expect(await stop(ctx({ session_id: 's1' }))).toEqual({ exitCode: 0 });
+    const log = fs.readFileSync(path.join(root, '.mapskill', 'log.txt'), 'utf8');
+    for (const event of ['user-prompt-submit', 'post-tool-use', 'stop']) expect(log).toContain(`${event}: skipped: no time left`);
+  });
+
   it('session-start returns context with the locks', async () => {
     const root = project();
     await daemon(root);

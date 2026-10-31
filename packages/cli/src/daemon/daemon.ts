@@ -217,7 +217,11 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       queue.flushNow();
       return findSimilar(project!.graph.files, project!.graph.nodes, query);
     },
-    node: async (query) => nodeDetails(await graphNow(), query),
+    node: async (query) => {
+      if (query.path === undefined) return nodeDetails(await graphNow(), query);
+      const rel = toProjectRel(root, query.path);
+      return rel === null ? null : nodeDetails(await graphNow(), { ...query, path: rel });
+    },
     shutdown: () => {
       void stop('shutdown request');
     },

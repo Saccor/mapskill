@@ -245,6 +245,9 @@ describe('startDaemon', () => {
     expect(matches[0]).toMatchObject({ name: 'sumA', file: 'lib/a.ts' });
     const node = await request<{ text: string }>(h.info, 'GET', '/api/node?path=lib/a.ts');
     expect(node.text).toContain('sumA');
+    const abs = await request<{ text: string }>(h.info, 'GET', `/api/node?path=${encodeURIComponent(path.join(root, 'lib', 'a.ts'))}`);
+    expect(abs.text).toContain('sumA');
+    await expect(request(h.info, 'GET', `/api/node?path=${encodeURIComponent(path.join(root, '..', 'x.ts'))}`)).rejects.toThrow(/404|no such node/);
   });
 });
 

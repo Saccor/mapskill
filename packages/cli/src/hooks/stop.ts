@@ -1,6 +1,7 @@
 // packages/cli/src/hooks/stop.ts
 import type { StopAnswer } from '@mapskill/core';
 import { liveDaemon, request } from '../daemon/client';
+import { logHookProblem } from './log';
 import { ALLOW, timeLeft, type HookHandler } from './run';
 
 export function formatStopReason(answer: StopAnswer): string {
@@ -20,7 +21,10 @@ export const stop: HookHandler = async (ctx) => {
   const info = await liveDaemon(root);
   if (!info) return ALLOW;
   const t = Math.min(8000, timeLeft(ctx));
-  if (t < 200) return ALLOW;
+  if (t < 200) {
+    logHookProblem(root, 'stop', 'skipped: no time left');
+    return ALLOW;
+  }
   const answer = await request<StopAnswer>(info, 'POST', '/api/stop', { sessionId: input.session_id ?? 'default' }, t);
   if (answer.findings.length === 0) return ALLOW;
   return { exitCode: 0, stdout: JSON.stringify({ decision: 'block', reason: formatStopReason(answer) }) };

@@ -111,7 +111,7 @@ export function createMcpServer(options: { root: string; daemon: () => Promise<D
     },
     async () =>
       withDaemon(async (info) => {
-        const { findings } = await request<{ findings: Finding[] }>(info, 'GET', '/api/findings?session=latest', undefined, 10_000);
+        const { findings } = await request<{ findings: Finding[] }>(info, 'GET', '/api/findings?session=latest&touchedOnly=true', undefined, 10_000);
         return ok(formatFindings(findings));
       }),
   );

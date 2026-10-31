@@ -27,10 +27,14 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-/** Writes JSON to a temporary file and renames it over the target, so readers never see half a file. Retries briefly when Windows holds the target open. */
-export function writeJsonAtomic(file: string, data: unknown, mode?: number): void {
+/** Writes text to a temporary file and renames it over the target, so readers never see half a file. Retries briefly when Windows holds the target open. */
+export function writeTextAtomic(file: string, text: string): void {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data), mode === undefined ? undefined : { mode });
+  fs.writeFileSync(tmp, text);
+  renameWithRetry(tmp, file);
+}
+
+function renameWithRetry(tmp: string, file: string): void {
   for (let attempt = 0; ; attempt++) {
     try {
       fs.renameSync(tmp, file);
@@ -43,6 +47,13 @@ export function writeJsonAtomic(file: string, data: unknown, mode?: number): voi
       sleepSync(20);
     }
   }
+}
+
+/** Writes JSON to a temporary file and renames it over the target, so readers never see half a file. Retries briefly when Windows holds the target open. */
+export function writeJsonAtomic(file: string, data: unknown, mode?: number): void {
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data), mode === undefined ? undefined : { mode });
+  renameWithRetry(tmp, file);
 }
 
 export function readJson<T>(file: string): T | null {

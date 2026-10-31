@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { formatGoalFile, parseGoalFile, type LayoutFile } from '@mapskill/core';
-import { ensureMapskillDir, mapskillPath, readJson, writeJsonAtomic } from './paths';
+import { ensureMapskillDir, mapskillPath, readJson, writeJsonAtomic, writeTextAtomic } from './paths';
 
 export function readDismissed(root: string): Record<string, string> {
   const data = readJson<{ dismissed?: Record<string, unknown> }>(mapskillPath(root, 'dismissed.json'));
@@ -40,7 +40,7 @@ export function writeGoalId(root: string, id: string | null): void {
     return;
   }
   ensureMapskillDir(root);
-  fs.writeFileSync(file, formatGoalFile(id));
+  writeTextAtomic(file, formatGoalFile(id));
 }
 
 /** Most slots kept in layout.json: a full save of this size still fits the 1 MB request body limit. */
@@ -59,7 +59,7 @@ export function writeLayout(root: string, layout: LayoutFile): void {
 
 /** The absolute path of a project-relative file, or null for anything outside the project or inside .mapskill/. */
 export function safeProjectFile(root: string, rel: string): string | null {
-  const p = path.posix.normalize(rel.split(String.fromCharCode(92)).join('/'));
+  const p = path.posix.normalize(rel.split('\\').join('/'));
   if (p === '.' || path.posix.isAbsolute(p) || path.win32.isAbsolute(p) || p === '..' || p.startsWith('../')) return null;
   const lower = p.toLowerCase();
   if (lower === '.mapskill' || lower.startsWith('.mapskill/')) return null;

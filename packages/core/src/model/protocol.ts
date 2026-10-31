@@ -93,7 +93,8 @@ export interface SourceAnswer {
 
 /** Messages the daemon sends over WebSocket. */
 export type ServerMessage =
-  | { type: 'graph'; seq: number; graph: PublicGraph }
+  /** `goal` is the current goal status, so a client that connects (or reconnects) starts with it. */
+  | { type: 'graph'; seq: number; graph: PublicGraph; goal?: GoalStatus | null }
   /** `goal` rides with the delta when the goal status changed with it, so clients apply both in one step. */
   | { type: 'delta'; seq: number; delta: GraphDelta; goal?: GoalStatus | null }
   | { type: 'activity'; at: number; files: ActivityFile[] }

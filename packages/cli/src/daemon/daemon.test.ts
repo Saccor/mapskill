@@ -487,6 +487,32 @@ describe('goals', () => {
     expect(fs.existsSync(path.join(root, '.mapskill', 'goal.yaml'))).toBe(false);
   });
 
+  it('sends the goal status in the hello graph message', async () => {
+    const root = copyFixture('half-saas');
+    const h = await start(root, { watch: false });
+    await request(h.info, 'POST', '/api/goal', { goalId: 'saas-auth-payments' });
+    const client = await connect(h.info);
+    await waitFor(() => client.messages.some((m) => m.type === 'graph'));
+    const hello = client.messages.find((m) => m.type === 'graph') as { goal?: { goalId: string } | null };
+    expect(hello.goal?.goalId).toBe('saas-auth-payments');
+    client.close();
+  });
+
+  it('dismissing a finding sends the goal change inside the delta, not as a separate message', async () => {
+    const root = copyFixture('messy-app');
+    const h = await start(root, { watch: false });
+    await request(h.info, 'POST', '/api/goal', { goalId: 'webapp-auth' });
+    const client = await connect(h.info);
+    const graph = await request<PublicGraph>(h.info, 'GET', '/api/graph');
+    const secrets = graph.findings.filter((f) => f.kind === 'hardcoded-secret');
+    expect(secrets.length).toBeGreaterThan(0);
+    const before = client.messages.length;
+    for (const s of secrets) await request(h.info, 'POST', '/api/dismiss', { findingId: s.id });
+    await waitFor(() => client.messages.some((m) => m.type === 'delta' && m.goal?.items.find((i) => i.id === 'no-secrets')?.done === true));
+    expect(client.messages.slice(before).some((m) => m.type === 'goal')).toBe(false);
+    client.close();
+  });
+
   it('counts a non-source file for fileExists checks and refuses paths outside the project', async () => {
     const root = copyFixture('half-saas');
     fs.rmSync(path.join(root, '.env.example'));

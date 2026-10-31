@@ -154,8 +154,8 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     } catch (err) {
       changedSinceReconcile = true; // let the drift check recover a failed batch
       log(`update failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+      refreshGoal();
     }
-    refreshGoal();
   };
   const goalFileExists = (rel: string): boolean => {
     const abs = safeProjectFile(root, rel);
@@ -178,7 +178,9 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       const template = goalId ? safeFindGoal(goalId) : null;
       next = template ? evaluateGoal(template, toPublicGraph(project.graph), goalFileExists) : null;
     } catch (err) {
+      // Keep what clients already show rather than reporting "no goal".
       log(`goal evaluation failed: ${String(err)}`);
+      return null;
     }
     if (JSON.stringify(next) === JSON.stringify(goalStatus)) return null;
     goalStatus = next;
@@ -239,7 +241,8 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     // and deltas are broadcast only from macrotasks. Adding an await here would break that guarantee.
     hello: async () => {
       const graph = await graphNow();
-      return { type: 'graph', seq, graph };
+      refreshGoal(); // sync: nothing can slip in between this snapshot and the server adding the client
+      return { type: 'graph', seq, graph, goal: goalStatus };
     },
     touched: async ({ files, sessionId, bash }) => {
       await loaded;
@@ -347,11 +350,14 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       const visible = new Set(project.graph.findings.map((f) => f.id));
       const kept = Object.fromEntries(Object.entries(project.dismissed).filter(([id]) => !visible.has(id)));
       project.dismissed = kept;
-      refreshGoal();
+      // The goal travels with the delta, so clients apply both in one step; on its own only when the delta is empty.
+      const goalChange = recomputeGoal();
       // Broadcast first: the graph already changed, so clients must not miss the delta if the write fails.
       if (!result.empty) {
         seq += 1;
-        server.broadcast({ type: 'delta', seq, delta: result.delta });
+        server.broadcast(goalChange ? { type: 'delta', seq, delta: result.delta, goal: goalChange.status } : { type: 'delta', seq, delta: result.delta });
+      } else if (goalChange) {
+        server.broadcast({ type: 'goal', status: goalChange.status });
       }
       try {
         writeDismissed(root, kept);

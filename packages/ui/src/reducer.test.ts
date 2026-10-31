@@ -1,4 +1,4 @@
-import type { PublicGraph } from '@mapskill/core/client';
+import type { PublicGraph, ServerMessage } from '@mapskill/core/client';
 import { describe, expect, it } from 'vitest';
 import { initialState, PULSE_MS, reduce } from './reducer';
 
@@ -66,5 +66,16 @@ describe('reduce', () => {
     s = reduce(s, { type: 'server', now: 0, message: { type: 'goal', status: live } });
     expect(s.goal).toEqual(live);
     expect(s.goals).toHaveLength(1);
+  });
+  it('applies the goal that comes with the hello graph and ignores unknown message types', () => {
+    const live = { goalId: 'g', title: { en: 'G', sv: 'G' }, items: [], done: 0, total: 0 };
+    const s1 = reduce(initialState, { type: 'server', now: 0, message: { type: 'graph', seq: 1, graph: graph(['a']), goal: live } });
+    expect(s1.goal).toEqual(live);
+    const s2 = reduce(s1, { type: 'server', now: 0, message: { type: 'graph', seq: 2, graph: graph(['a']), goal: null } });
+    expect(s2.goal).toBeNull();
+    const s3 = reduce(s1, { type: 'server', now: 0, message: { type: 'graph', seq: 2, graph: graph(['a']) } });
+    expect(s3.goal).toEqual(live);
+    const unknown = { type: 'from-the-future' } as unknown as ServerMessage;
+    expect(reduce(s1, { type: 'server', now: 0, message: unknown })).toBe(s1);
   });
 });

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { tmpProject } from '@mapskill/core/test-helpers';
 import { describe, expect, it } from 'vitest';
+import { writeTextAtomic } from './paths';
 import { MAX_LAYOUT_ENTRIES, mergeLayout, readDismissed, readGoalId, readLayout, safeProjectFile, writeDismissed, writeGoalId, writeLayout } from './state-files';
 
 describe('state files', () => {
@@ -24,6 +25,16 @@ describe('state files', () => {
     writeGoalId(r, null);
     expect(fs.existsSync(path.join(r, '.mapskill', 'goal.yaml'))).toBe(false);
     writeGoalId(r, null); // removing twice is fine
+  });
+
+  it('writes the goal atomically and leaves no temporary files', () => {
+    const r = tmpProject({ 'package.json': '{}' });
+    writeGoalId(r, 'webapp-auth');
+    writeGoalId(r, 'crud-app');
+    expect(fs.readdirSync(path.join(r, '.mapskill')).filter((f) => f.endsWith('.tmp'))).toEqual([]);
+    expect(readGoalId(r)).toBe('crud-app');
+    writeTextAtomic(path.join(r, '.mapskill', 'x.txt'), 'hello\n');
+    expect(fs.readFileSync(path.join(r, '.mapskill', 'x.txt'), 'utf8')).toBe('hello\n');
   });
 
   it('drops invalid entries', () => {

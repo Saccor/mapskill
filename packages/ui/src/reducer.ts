@@ -50,7 +50,7 @@ export type Action =
 function onServer(state: MapState, m: ServerMessage): MapState {
   switch (m.type) {
     case 'graph':
-      return { ...state, graph: m.graph, seq: m.seq, needsResync: false, status: 'live' };
+      return { ...state, graph: m.graph, seq: m.seq, needsResync: false, status: 'live', ...(m.goal !== undefined ? { goal: m.goal } : {}) };
     case 'delta':
       if (!state.graph || m.seq !== state.seq + 1) return { ...state, needsResync: true };
       return { ...state, graph: applyDelta(state.graph, m.delta), seq: m.seq, ...(m.goal !== undefined ? { goal: m.goal } : {}) };
@@ -68,6 +68,8 @@ function onServer(state: MapState, m: ServerMessage): MapState {
       return { ...state, locks: m.locks, lockedFiles: m.lockedFiles };
     case 'goal':
       return { ...state, goal: m.status };
+    default:
+      return state;
   }
 }
 

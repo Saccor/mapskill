@@ -12,6 +12,18 @@ Starta sedan Claude Code med pluginet i ett Next.js-projekt:
 Pluginet gör fyra saker:
 
 - startar Mapskills bakgrundsprocess när sessionen börjar
-- stoppar ändringar i filer du låst med `mapskill lock <fil eller mapp>`
+- stoppar ändringar i filer du låst (se nedan)
 - påminner Claude om nya dubbletter och andra säkra fynd innan Claude avslutar sitt svar
 - ger Claude verktygen `map_overview`, `find_similar`, `node_details` och `turn_findings`
+
+## Låsa filer
+
+Kommandot `mapskill` finns inte på din PATH när bara pluginet är installerat. Lås från Mapskill-repot med en absolut sökväg eller en sökväg relativt projektet:
+
+    pnpm mapskill lock <sökväg>
+
+Eller kör den paketerade filen inifrån projektmappen:
+
+    node <sökväg till repot>/plugin/dist/mapskill.mjs lock <sökväg>
+
+Lås tas bort med `unlock` i stället för `lock`, eller genom att du tar bort raden i `.mapskill/locks.json`.

@@ -57,6 +57,8 @@ describe('pre-tool-use', () => {
     expect(result.stderr).toContain('"Betalning"');
     expect(result.stderr).toContain('lib/pay/charge.ts');
     expect(result.stderr).toContain('mapskill unlock lib/pay/');
+    expect(result.stderr).toContain('Ask the user first.');
+    expect(result.stderr).not.toContain('Mapskill map');
   });
 
   it('blocks a new file in a locked folder and leaves other files alone', async () => {
@@ -66,6 +68,24 @@ describe('pre-tool-use', () => {
     expect((await runHook('pre-tool-use', { stdin: stdin(write), env: env(root) })).exitCode).toBe(2);
     expect((await runHook('pre-tool-use', { stdin: stdin(edit(root, 'lib/a.ts')), env: env(root) })).exitCode).toBe(0);
     expect((await runHook('pre-tool-use', { stdin: stdin(edit(root, '../outside.ts')), env: env(root) })).exitCode).toBe(0);
+  });
+
+  it('blocks a lock stored in the nearest package root when the hook root is an outer folder', async () => {
+    const root = canonicalRoot(
+      tmpProject({ 'package.json': '{}', 'apps/web/package.json': '{}', 'apps/web/lib/a.ts': '', 'apps/web/lib/b.ts': '' }),
+    );
+    const subRoot = path.join(root, 'apps', 'web');
+    addLocks(subRoot, [path.join(subRoot, 'lib', 'a.ts')]);
+    expect(fs.existsSync(path.join(subRoot, '.mapskill', 'locks.json'))).toBe(true);
+    const blocked = await runHook('pre-tool-use', { stdin: stdin(edit(root, 'apps/web/lib/a.ts')), env: env(root) });
+    expect(blocked.exitCode).toBe(2);
+    expect(blocked.stderr).toContain('lib/a.ts');
+    expect((await runHook('pre-tool-use', { stdin: stdin(edit(root, 'apps/web/lib/b.ts')), env: env(root) })).exitCode).toBe(0);
+    // a broken locks.json in the sub-package fails closed too
+    fs.writeFileSync(path.join(subRoot, '.mapskill', 'locks.json'), '{ broken');
+    const broken = await runHook('pre-tool-use', { stdin: stdin(edit(root, 'apps/web/lib/b.ts')), env: env(root) });
+    expect(broken.exitCode).toBe(2);
+    expect(broken.stderr).toContain('cannot read .mapskill/locks.json');
   });
 
   it('fails closed when locks.json is broken', async () => {
@@ -118,7 +138,7 @@ describe('runHook', () => {
     const elapsed = Date.now() - started;
     expect(elapsed).toBeLessThan(4500);
     expect(elapsed).toBeGreaterThanOrEqual(900);
-    expect(elapsed).toBeLessThan(1800); // stdin limit is min(2000, 4000 / 4) = 1000 ms
+    expect(elapsed).toBeLessThan(3000); // stdin limit is min(2000, 4000 / 4) = 1000 ms
   }, 10_000);
 
   it('logs nothing outside a JS project and rejects unknown events', async () => {

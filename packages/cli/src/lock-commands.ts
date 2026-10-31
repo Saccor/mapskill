@@ -23,6 +23,8 @@ export function runLock(argv: string[], cwd = process.cwd(), write: Write = stdo
     return 1;
   }
   try {
+    write(`Project: ${root}
+`);
     const read = readLocks(root);
     const before = new Set(read.ok ? read.locks.map((l) => l.path) : []);
     for (const l of addLocks(root, paths, label)) if (!before.has(l.path)) write(`Locked ${l.path}\n`);
@@ -41,6 +43,8 @@ export function runUnlock(argv: string[], cwd = process.cwd(), write: Write = st
     return 1;
   }
   try {
+    write(`Project: ${root}
+`);
     const left = removeLocks(root, paths);
     write(`${left.length} lock${left.length === 1 ? '' : 's'} left\n`);
     return 0;

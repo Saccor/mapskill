@@ -18,6 +18,24 @@ describe('project paths', () => {
     expect(toProjectRel(root, path.join(root, 'LIB', 'A.TS'))).toBe('lib/a.ts');
   });
 
+  it('maps a NEW file addressed through a junction or symlink to the root', (ctx) => {
+    const root = canonicalRoot(tmpProject({ 'package.json': '{}', 'lib/a.ts': '' }));
+    const link = path.join(path.dirname(root), `mapskill-link-${process.pid}-${Date.now()}`);
+    try {
+      fs.symlinkSync(root, link, process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') return ctx.skip('cannot create a directory link without privileges (EPERM)');
+      throw err;
+    }
+    try {
+      expect(toProjectRel(root, path.join(link, 'lib', 'new.ts'))).toBe('lib/new.ts');
+      expect(toProjectRel(root, path.join(link, 'newdir', 'deep', 'x.ts'))).toBe('newdir/deep/x.ts');
+      expect(toProjectRel(root, path.join(link, '..', 'x.ts'))).toBeNull();
+    } finally {
+      fs.rmSync(link, { recursive: true, force: true });
+    }
+  });
+
   it('finds the nearest folder with a package.json', () => {
     const root = tmpProject({ 'package.json': '{}', 'app/x/page.tsx': '' });
     expect(findProjectRoot(path.join(root, 'app', 'x'))).toBe(canonicalRoot(root));

@@ -16,6 +16,8 @@ describe('lock commands', () => {
     const cwd = path.join(root, 'lib');
     const a = capture();
     expect(runLock(['pay', 'a.ts', '--label', 'Betalning'], cwd, a.write)).toBe(0);
+    expect(a.out[0]).toBe(`Project: ${root}
+`);
     expect(a.out.join('')).toContain('Locked lib/pay/');
     const read = readLocks(root);
     expect(read.ok && read.locks.map((l) => l.path)).toEqual(['lib/pay/', 'lib/a.ts']);
@@ -24,7 +26,10 @@ describe('lock commands', () => {
     expect(runLocks([], cwd, b.write)).toBe(0);
     expect(b.out.join('')).toContain('lib/pay/ (Betalning)');
 
-    expect(runUnlock(['pay'], cwd, capture().write)).toBe(0);
+    const u = capture();
+    expect(runUnlock(['pay'], cwd, u.write)).toBe(0);
+    expect(u.out[0]).toBe(`Project: ${root}
+`);
     const after = readLocks(root);
     expect(after.ok && after.locks.map((l) => l.path)).toEqual(['lib/a.ts']);
   });

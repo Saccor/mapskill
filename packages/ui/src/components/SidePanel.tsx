@@ -1,6 +1,7 @@
 import type { Finding, MapNode, PublicGraph } from '@mapskill/core/client';
 import { useEffect, useRef, useState } from 'react';
-import { ApiError, type Api } from '../api';
+import type { Api } from '../api';
+import { errorText } from '../errors';
 import { NODE_TYPE_TEXT, t, type Lang } from '../i18n';
 import { NODE_ICON } from '../icons';
 import { explainText, fixText } from '../requests';
@@ -28,12 +29,14 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError }:
   const findings: Finding[] = findingsByNode(graph)[node.id] ?? [];
   const { usedBy, uses } = related(graph, node.id);
   const health = graph.health[node.id] ?? 10;
-  const fail = (key: 'actionFailed' | 'lockFailed') => (err: unknown) =>
-    onError(
-      key === 'lockFailed' && err instanceof ApiError && err.status === 409
-        ? t(lang, 'lockedByFolder')
-        : t(lang, key, { error: err instanceof Error ? err.message : String(err) }),
-    );
+  const fail = (key: 'actionFailed' | 'lockFailed') => (err: unknown) => {
+    console.warn(err);
+    onError(t(lang, key, { error: errorText(err, lang) }));
+  };
+  const failCopy = (err: unknown): void => {
+    console.warn(err);
+    onError(t(lang, 'copyFailed'));
+  };
 
   const list = (items: MapNode[]) =>
     items.length === 0 ? (
@@ -84,7 +87,7 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError }:
               setCopied(true);
               clearTimeout(copyTimer.current);
               copyTimer.current = setTimeout(() => setCopied(false), 2000);
-            }, fail('actionFailed'))
+            }, failCopy)
           }
         >
           {copied ? t(lang, 'copied') : t(lang, 'copy')}

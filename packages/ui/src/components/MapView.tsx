@@ -1,4 +1,4 @@
-import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/react';
+import { Background, Controls, ReactFlow, type AriaLabelConfig, type Edge, type Node } from '@xyflow/react';
 import { ZONE_LABELS, type EdgeKind, type PublicGraph, type Zone } from '@mapskill/core/client';
 import { useEffect, useMemo, useState } from 'react';
 import { NODE_TYPE_TEXT, t, type Lang } from '../i18n';
@@ -18,6 +18,23 @@ const EDGE_TEXT: Record<EdgeKind, { en: string; sv: string }> = {
   'talks-to': { en: 'talks to', sv: 'pratar med' },
   tests: { en: 'tests', sv: 'testar' },
 };
+
+/** Every string React Flow adds to the page, in the user's language (none of them mention deleting: parts only open). */
+export function ariaLabels(lang: Lang): AriaLabelConfig {
+  return {
+    'node.a11yDescription.default': t(lang, 'rfNodeDesc'),
+    'node.a11yDescription.keyboardDisabled': t(lang, 'rfNodeDesc'),
+    'node.a11yDescription.ariaLiveMessage': ({ direction, x, y }) => t(lang, 'rfMoved', { direction, x, y }),
+    'edge.a11yDescription.default': t(lang, 'rfEdgeDesc'),
+    'controls.ariaLabel': t(lang, 'rfControls'),
+    'controls.zoomIn.ariaLabel': t(lang, 'rfZoomIn'),
+    'controls.zoomOut.ariaLabel': t(lang, 'rfZoomOut'),
+    'controls.fitView.ariaLabel': t(lang, 'rfFitView'),
+    'controls.interactive.ariaLabel': t(lang, 'rfInteractive'),
+    'minimap.ariaLabel': t(lang, 'rfMinimap'),
+    'handle.ariaLabel': t(lang, 'rfHandle'),
+  };
+}
 
 export interface MapViewProps {
   graph: PublicGraph;
@@ -41,6 +58,7 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
   }, [state.pulseUntil, now]);
   useEffect(() => setNow(Date.now()), [state.pulseUntil]);
 
+  const labels = useMemo(() => ariaLabels(lang), [lang]);
   const { nodes, edges } = useMemo(() => {
     const layout = layoutMap(graph.nodes, slots, collapsed);
     const flags = partFlags(graph, state, now);
@@ -124,6 +142,7 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      ariaLabelConfig={labels}
       colorMode="system"
       fitView
       minZoom={0.2}

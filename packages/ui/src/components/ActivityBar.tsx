@@ -1,6 +1,7 @@
 import type { MapRequest, PublicGraph } from '@mapskill/core/client';
 import { useState } from 'react';
 import type { Api } from '../api';
+import { errorText } from '../errors';
 import { t, type Lang } from '../i18n';
 import type { Activity } from '../reducer';
 import { pendingCount } from '../requests';
@@ -10,7 +11,14 @@ export function ActivityBar({ activity, requests, graph, lang, api, onError }: {
   const [open, setOpen] = useState(false);
   const latest = activity[0];
   const pending = requests.filter((r) => r.status === 'pending');
-  const fail = (err: unknown): void => onError(t(lang, 'actionFailed', { error: err instanceof Error ? err.message : String(err) }));
+  const fail = (err: unknown): void => {
+    console.warn(err);
+    onError(t(lang, 'actionFailed', { error: errorText(err, lang) }));
+  };
+  const failCopy = (err: unknown): void => {
+    console.warn(err);
+    onError(t(lang, 'copyFailed'));
+  };
   const time = latest ? new Date(latest.at).toLocaleTimeString(lang === 'sv' ? 'sv-SE' : 'en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
   return (
     <footer className="activity">
@@ -33,7 +41,7 @@ export function ActivityBar({ activity, requests, graph, lang, api, onError }: {
               {pending.map((r) => (
                 <li key={r.id}>
                   <span>{r.text}</span>
-                  <button onClick={() => navigator.clipboard.writeText(r.text).catch(fail)}>{t(lang, 'copy')}</button>
+                  <button onClick={() => navigator.clipboard.writeText(r.text).catch(failCopy)}>{t(lang, 'copy')}</button>
                   <button onClick={() => api.cancelRequest(r.id).catch(fail)}>{t(lang, 'cancel')}</button>
                 </li>
               ))}
@@ -42,7 +50,7 @@ export function ActivityBar({ activity, requests, graph, lang, api, onError }: {
         </span>
       )}
       <a className="credit" href="https://reactflow.dev" target="_blank" rel="noreferrer noopener">
-        Map: React Flow
+        {t(lang, 'credit')}
       </a>
     </footer>
   );

@@ -107,14 +107,29 @@ function matches(ctx: Ctx, n: MapNode, c: Compiled): boolean {
   return true;
 }
 
+/** Ids of the table nodes the node reaches (see `reach`) whose name matches the filter's touchesTable. */
+function touchedTables(ctx: Ctx, n: MapNode, table: RegExp): string[] {
+  const ids = new Set<string>();
+  for (const id of reach(ctx, n.id)) {
+    for (const e of ctx.out.get(id) ?? []) {
+      if ((e.kind === 'reads' || e.kind === 'writes') && e.to.startsWith('table:') && table.test(e.to.slice('table:'.length))) ids.add(e.to);
+    }
+  }
+  return [...ids];
+}
+
 /** Result of one check, and the nodes of the first anyNode that was true. */
 function run(ctx: Ctx, c: GoalCheck, fileExists: (rel: string) => boolean): { ok: boolean; nodes: string[] } {
   if ('fileExists' in c) return { ok: fileExists(c.fileExists), nodes: [] };
   if ('noFindings' in c) return { ok: !ctx.graph.findings.some((f) => f.kind === c.noFindings), nodes: [] };
   if ('anyNode' in c) {
     const compiled = compile(c.anyNode);
-    const hits = ctx.graph.nodes.filter((n) => matches(ctx, n, compiled)).map((n) => n.id).sort();
-    return { ok: hits.length > 0, nodes: hits.slice(0, MAX_MATCHES) };
+    const matched = ctx.graph.nodes.filter((n) => matches(ctx, n, compiled));
+    const hits = matched.map((n) => n.id).sort();
+    // A table item is satisfied by the table itself, so the tables come first and become the heirs of the ghost.
+    const table = compiled.table;
+    const tables = table ? [...new Set(matched.flatMap((n) => touchedTables(ctx, n, table)))].sort() : [];
+    return { ok: hits.length > 0, nodes: [...tables, ...hits].slice(0, MAX_MATCHES) };
   }
   if ('all' in c) {
     let nodes: string[] = [];

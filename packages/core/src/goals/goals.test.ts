@@ -77,7 +77,7 @@ describe('evaluateGoal checks', () => {
       ],
     });
     const yes = evaluateGoal(t([item({ anyNode: { type: 'api-route', talksTo: 'stripe', touchesTable: '^subscriptions$' } })]), graph, () => false);
-    expect(yes.items[0]).toMatchObject({ done: true, matchedNodeIds: ['api-route:a'] });
+    expect(yes.items[0]).toMatchObject({ done: true, matchedNodeIds: ['table:subscriptions', 'api-route:a'] });
     const far = g({ ...graph, edges: [{ id: 'x', from: 'api-route:a', to: 'helper:b#b', kind: 'uses' }] });
     expect(evaluateGoal(t([item({ anyNode: { type: 'api-route', talksTo: 'stripe' } })]), far, () => false).items[0].done).toBe(false);
   });
@@ -155,7 +155,7 @@ describe('evaluateGoal fix round 1', () => {
         { id: 'e3', from: 'api-route:i', to: 'service:stripe', kind: 'talks-to' },
       ],
     });
-    expect(only('crud-app', 'list-page', graph)).toMatchObject({ done: true, matchedNodeIds: ['page:l'] });
+    expect(only('crud-app', 'list-page', graph)).toMatchObject({ done: true, matchedNodeIds: ['table:items', 'page:l'] });
     const t: GoalTemplate = { id: 't', title: { en: 't', sv: 't' }, description: { en: '', sv: '' }, items: [{ id: 'i', title: { en: 'i', sv: 'i' }, why: { en: 'w', sv: 'w' }, check: { anyNode: { type: 'page', talksTo: 'stripe' } } }] };
     expect(evaluateGoal(t, graph, () => false).items[0].done).toBe(true);
   });
@@ -198,6 +198,24 @@ describe('protect-pages item', () => {
   it('counts a real middleware.js and a real src/proxy.ts as done', () => {
     expect(scanned({ 'app/page.tsx': 'export default function P(){return null}', 'middleware.js': 'export function middleware(){}' }).done).toBe(true);
     expect(scanned({ 'app/page.tsx': 'export default function P(){return null}', 'src/proxy.ts': 'export function proxy(){}' }).done).toBe(true);
+  });
+});
+
+describe('touchesTable matches', () => {
+  it('lists the matched table nodes first, sorted, within the cap', () => {
+    const nodes: PublicGraph['nodes'] = [
+      { id: 'page:l', type: 'page', zone: 'pages', label: '/l', route: '/l', file: 'l' },
+      { id: 'table:subscriptions', type: 'table', zone: 'data', label: 'subscriptions' },
+      { id: 'table:customers', type: 'table', zone: 'data', label: 'customers' },
+      { id: 'table:posts', type: 'table', zone: 'data', label: 'posts' },
+    ];
+    const edges: PublicGraph['edges'] = [
+      { id: 'e1', from: 'page:l', to: 'table:subscriptions', kind: 'reads' },
+      { id: 'e2', from: 'page:l', to: 'table:customers', kind: 'writes' },
+      { id: 'e3', from: 'page:l', to: 'table:posts', kind: 'reads' },
+    ];
+    const s = evaluateGoal(findGoal('saas-auth-payments')!, g({ nodes, edges }), () => false);
+    expect(s.items.find((i) => i.id === 'subscriptions-table')).toMatchObject({ done: true, matchedNodeIds: ['table:customers', 'table:subscriptions', 'page:l'] });
   });
 });
 

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { formatGoalFile, parseGoalFile, type LayoutFile } from '@mapskill/core';
 import { ensureMapskillDir, mapskillPath, readJson, writeJsonAtomic } from './paths';
 
@@ -54,4 +55,13 @@ export function mergeLayout(existing: Record<string, number>, incoming: Record<s
 export function writeLayout(root: string, layout: LayoutFile): void {
   ensureMapskillDir(root);
   writeJsonAtomic(mapskillPath(root, 'layout.json'), { version: 1, slots: layout.slots });
+}
+
+/** The absolute path of a project-relative file, or null for anything outside the project or inside .mapskill/. */
+export function safeProjectFile(root: string, rel: string): string | null {
+  const p = path.posix.normalize(rel.split(String.fromCharCode(92)).join('/'));
+  if (p === '.' || path.posix.isAbsolute(p) || path.win32.isAbsolute(p) || p === '..' || p.startsWith('../')) return null;
+  const lower = p.toLowerCase();
+  if (lower === '.mapskill' || lower.startsWith('.mapskill/')) return null;
+  return path.join(root, p);
 }

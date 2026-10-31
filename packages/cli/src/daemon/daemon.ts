@@ -31,7 +31,7 @@ import { ChangeQueue, type ChangeBatch } from './queue';
 import { RequestQueue } from './requests';
 import { HttpError, startServer } from './server';
 import { findUiDir } from './ui-dir';
-import { mergeLayout, readDismissed, readGoalId, readLayout, writeDismissed, writeGoalId, writeLayout } from './state-files';
+import { mergeLayout, readDismissed, readGoalId, readLayout, safeProjectFile, writeDismissed, writeGoalId, writeLayout } from './state-files';
 import { TurnTracker } from './turns';
 import { watchProject, type ProjectWatcher } from './watcher';
 
@@ -154,9 +154,8 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     refreshGoal();
   };
   const goalFileExists = (rel: string): boolean => {
-    const p = path.posix.normalize(rel.split('\\').join('/'));
-    if (path.posix.isAbsolute(p) || path.win32.isAbsolute(p) || p === '..' || p.startsWith('../') || p.startsWith('.mapskill/')) return false;
-    return fs.existsSync(path.join(root, p));
+    const abs = safeProjectFile(root, rel);
+    return abs !== null && fs.existsSync(abs);
   };
   /** A broken template (for example an extends cycle) must never take the daemon down: it counts as no goal. */
   const safeFindGoal = (id: string): ReturnType<typeof findGoal> => {
@@ -360,8 +359,8 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     setGoal: async (id) => {
       await loaded;
       if (id !== null && !safeFindGoal(id)) throw new HttpError(404, 'no such goal');
-      goalId = id;
       writeGoalId(root, id);
+      goalId = id;
       refreshGoal();
       return { goals: goalSummaries(), status: goalStatus };
     },

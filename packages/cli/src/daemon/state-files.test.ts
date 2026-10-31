@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { tmpProject } from '@mapskill/core/test-helpers';
 import { describe, expect, it } from 'vitest';
-import { MAX_LAYOUT_ENTRIES, mergeLayout, readDismissed, readGoalId, readLayout, writeDismissed, writeGoalId, writeLayout } from './state-files';
+import { MAX_LAYOUT_ENTRIES, mergeLayout, readDismissed, readGoalId, readLayout, safeProjectFile, writeDismissed, writeGoalId, writeLayout } from './state-files';
 
 describe('state files', () => {
   it('round-trips dismissed findings and layout', () => {
@@ -49,5 +49,19 @@ describe('state files', () => {
     expect('old0' in out).toBe(false);
     expect('old1' in out).toBe(false);
     expect('old2' in out).toBe(true);
+  });
+});
+
+describe('safeProjectFile', () => {
+  const root = path.resolve('/proj');
+  it.each(['../x', 'a/../../x', '/abs', 'C:\\x', 'C:/x', '..\\x', '..', '', '.mapskill', '.mapskill/goal.yaml', 'a/../.mapskill/x', '.MAPSKILL/x', '.Mapskill'])(
+    'refuses %j',
+    (rel) => {
+      expect(safeProjectFile(root, rel)).toBeNull();
+    },
+  );
+  it('returns the absolute path for project files', () => {
+    expect(safeProjectFile(root, '.env.example')).toBe(path.join(root, '.env.example'));
+    expect(safeProjectFile(root, 'src/middleware.ts')).toBe(path.join(root, 'src', 'middleware.ts'));
   });
 });

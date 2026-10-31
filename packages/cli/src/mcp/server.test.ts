@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { request, selfCommand } from '../daemon/client';
 import { startDaemon, type DaemonHandle } from '../daemon/daemon';
 import { canonicalRoot } from '../project-path';
-import { createMcpServer } from './server';
+import { createMcpServer, formatGoalGaps } from './server';
 
 const body = (name: string): string =>
   `export function ${name}(items: number[]) {\n` +
@@ -113,4 +113,26 @@ describe('mapskill mcp over stdio', () => {
     expect(tools).toHaveLength(5);
     await client.close();
   }, 30_000);
+});
+
+describe('formatGoalGaps', () => {
+  const t = (en: string) => ({ en, sv: en });
+  const item = (over: Record<string, unknown>) => ({ id: 'i', title: t('Thing'), why: t('Because.'), done: false, ...over });
+  const status = (items: unknown[], done: number) =>
+    ({ goalId: 'g', title: t('Goal'), done, total: items.length, items }) as unknown as Parameters<typeof formatGoalGaps>[0];
+
+  it('omits the node type and suggested place when they are missing', () => {
+    expect(formatGoalGaps(status([item({})], 0))).toBe('Goal: Goal (0/1 done).\nMissing:\n- Thing — Because.');
+  });
+  it('says nothing is missing and has no Done section when nothing is done or missing', () => {
+    expect(formatGoalGaps(status([], 0))).toBe('Goal: Goal (0/0 done).\nMissing: nothing.');
+  });
+  it('lists done items after Missing: nothing', () => {
+    expect(formatGoalGaps(status([item({ done: true })], 1))).toBe('Goal: Goal (1/1 done).\nMissing: nothing.\nDone:\n- Thing');
+  });
+  it('has no Done section when nothing is done', () => {
+    expect(formatGoalGaps(status([item({ nodeType: 'page', suggestPath: 'app/a/page.tsx' })], 0))).toBe(
+      'Goal: Goal (0/1 done).\nMissing:\n- Thing [page] — Because. Suggested place: app/a/page.tsx.',
+    );
+  });
 });

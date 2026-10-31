@@ -1,6 +1,6 @@
 import type { PublicGraph } from '../graph/delta';
 import type { GoalItemStatus, GoalStatus, GoalSummary } from '../model/protocol';
-import type { MapNode } from '../model/types';
+import type { MapEdge, MapNode } from '../model/types';
 import { ZONE_OF_TYPE } from '../model/zones';
 import { BUILTIN_GOALS } from './builtin';
 import type { GoalCheck, GoalItem, GoalTemplate, NodeFilter } from './types';
@@ -33,77 +33,109 @@ function regex(source: string): RegExp | null {
   }
 }
 
-/** The node plus every node it reaches over `uses` edges in at most MAX_STEPS steps. */
-function reach(graph: PublicGraph, start: string): Set<string> {
-  const out = new Set([start]);
+interface Ctx {
+  graph: PublicGraph;
+  out: Map<string, MapEdge[]>;
+  reachCache: Map<string, Set<string>>;
+}
+
+function makeCtx(graph: PublicGraph): Ctx {
+  const out = new Map<string, MapEdge[]>();
+  for (const e of graph.edges) {
+    const list = out.get(e.from);
+    if (list) list.push(e);
+    else out.set(e.from, [e]);
+  }
+  return { graph, out, reachCache: new Map() };
+}
+
+/** The node plus every node it reaches over `uses` and `calls-api` edges in at most MAX_STEPS steps. */
+function reach(ctx: Ctx, start: string): Set<string> {
+  const cached = ctx.reachCache.get(start);
+  if (cached) return cached;
+  const seen = new Set([start]);
   let frontier = [start];
   for (let step = 0; step < MAX_STEPS && frontier.length > 0; step++) {
     const next: string[] = [];
     for (const id of frontier) {
-      for (const e of graph.edges) {
-        if (e.from === id && e.kind === 'uses' && !out.has(e.to)) {
-          out.add(e.to);
+      for (const e of ctx.out.get(id) ?? []) {
+        if ((e.kind === 'uses' || e.kind === 'calls-api') && !seen.has(e.to)) {
+          seen.add(e.to);
           next.push(e.to);
         }
       }
     }
     frontier = next;
   }
-  return out;
+  ctx.reachCache.set(start, seen);
+  return seen;
 }
 
-function matches(graph: PublicGraph, n: MapNode, f: NodeFilter): boolean {
-  if (n.planned) return false;
+/** A filter with its regexes compiled once. `bad` means a regex was invalid, so nothing matches. */
+interface Compiled {
+  f: NodeFilter;
+  route?: RegExp;
+  name?: RegExp;
+  table?: RegExp;
+  bad: boolean;
+}
+
+function compile(f: NodeFilter): Compiled {
+  const c: Compiled = { f, bad: false };
+  for (const [key, src] of [['route', f.routeMatches], ['name', f.nameMatches], ['table', f.touchesTable]] as const) {
+    if (src === undefined) continue;
+    const r = regex(src);
+    if (r) c[key] = r;
+    else c.bad = true;
+  }
+  return c;
+}
+
+function matches(ctx: Ctx, n: MapNode, c: Compiled): boolean {
+  const f = c.f;
+  if (n.planned || c.bad) return false;
   if (f.type && n.type !== f.type) return false;
-  if (f.routeMatches !== undefined) {
-    const r = regex(f.routeMatches);
-    if (!r || n.route === undefined || !r.test(n.route)) return false;
-  }
-  if (f.nameMatches !== undefined) {
-    const r = regex(f.nameMatches);
-    if (!r || !r.test(n.label)) return false;
-  }
-  if (f.talksTo !== undefined || f.touchesTable !== undefined) {
-    const nodes = reach(graph, n.id);
-    const from = graph.edges.filter((e) => nodes.has(e.from));
-    if (f.talksTo !== undefined && !from.some((e) => e.kind === 'talks-to' && e.to === `service:${f.talksTo}`)) return false;
-    if (f.touchesTable !== undefined) {
-      const r = regex(f.touchesTable);
-      const hit = (e: { kind: string; to: string }) =>
-        (e.kind === 'reads' || e.kind === 'writes') && e.to.startsWith('table:') && r !== null && r.test(e.to.slice('table:'.length));
-      if (!from.some(hit)) return false;
-    }
+  if (c.route && (n.route === undefined || !c.route.test(n.route))) return false;
+  if (c.name && !c.name.test(n.label)) return false;
+  if (f.talksTo !== undefined || c.table) {
+    const edges: MapEdge[] = [];
+    for (const id of reach(ctx, n.id)) edges.push(...(ctx.out.get(id) ?? []));
+    if (f.talksTo !== undefined && !edges.some((e) => e.kind === 'talks-to' && e.to === `service:${f.talksTo}`)) return false;
+    const table = c.table;
+    if (table && !edges.some((e) => (e.kind === 'reads' || e.kind === 'writes') && e.to.startsWith('table:') && table.test(e.to.slice('table:'.length)))) return false;
   }
   return true;
 }
 
 /** Result of one check, and the nodes of the first anyNode that was true. */
-function run(graph: PublicGraph, c: GoalCheck, fileExists: (rel: string) => boolean): { ok: boolean; nodes: string[] } {
+function run(ctx: Ctx, c: GoalCheck, fileExists: (rel: string) => boolean): { ok: boolean; nodes: string[] } {
   if ('fileExists' in c) return { ok: fileExists(c.fileExists), nodes: [] };
-  if ('noFindings' in c) return { ok: !graph.findings.some((f) => f.kind === c.noFindings), nodes: [] };
+  if ('noFindings' in c) return { ok: !ctx.graph.findings.some((f) => f.kind === c.noFindings), nodes: [] };
   if ('anyNode' in c) {
-    const hits = graph.nodes.filter((n) => matches(graph, n, c.anyNode)).map((n) => n.id).sort();
+    const compiled = compile(c.anyNode);
+    const hits = ctx.graph.nodes.filter((n) => matches(ctx, n, compiled)).map((n) => n.id).sort();
     return { ok: hits.length > 0, nodes: hits.slice(0, MAX_MATCHES) };
   }
   if ('all' in c) {
     let nodes: string[] = [];
     for (const sub of c.all) {
-      const r = run(graph, sub, fileExists);
+      const r = run(ctx, sub, fileExists);
       if (!r.ok) return { ok: false, nodes: [] };
       if (nodes.length === 0) nodes = r.nodes;
     }
     return { ok: true, nodes };
   }
   for (const sub of c.any) {
-    const r = run(graph, sub, fileExists);
+    const r = run(ctx, sub, fileExists);
     if (r.ok) return r;
   }
   return { ok: false, nodes: [] };
 }
 
 export function evaluateGoal(template: GoalTemplate, graph: PublicGraph, fileExists: (rel: string) => boolean): GoalStatus {
+  const ctx = makeCtx(graph);
   const items: GoalItemStatus[] = template.items.map((i) => {
-    const r = run(graph, i.check, fileExists);
+    const r = run(ctx, i.check, fileExists);
     return {
       id: i.id,
       title: i.title,

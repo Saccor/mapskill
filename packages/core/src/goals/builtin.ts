@@ -44,7 +44,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'About page', sv: 'Om-sida' },
         why: { en: 'Tells visitors who is behind the site.', sv: 'Berättar för besökarna vem som står bakom sidan.' },
         nodeType: 'page',
-        check: { anyNode: { type: 'page', routeMatches: '^/(about|om)$' } },
+        check: { anyNode: { type: 'page', routeMatches: '(^|/)(about|om)(/|$)' } },
         suggest: { path: 'app/about/page.tsx' },
       },
       {
@@ -52,7 +52,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'Way to get in touch', sv: 'Sätt att höra av sig' },
         why: { en: 'A contact page or form turns visitors into conversations.', sv: 'En kontaktsida eller ett formulär gör besökare till samtal.' },
         nodeType: 'page',
-        check: { any: [{ anyNode: { type: 'page', routeMatches: '(contact|kontakt)' } }, { anyNode: { type: 'api-route', routeMatches: '(contact|kontakt)' } }] },
+        check: { any: [{ anyNode: { type: 'page', routeMatches: '(^|/)(contact|kontakt)(/|$)' } }, { anyNode: { type: 'api-route', routeMatches: '(^|/)(contact|kontakt)(/|$)' } }] },
         suggest: { path: 'app/contact/page.tsx' },
       },
       {
@@ -85,7 +85,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'Login page', sv: 'Inloggningssida' },
         why: { en: 'People need a place to log in.', sv: 'Användarna behöver ett ställe att logga in på.' },
         nodeType: 'page',
-        check: { anyNode: { type: 'page', routeMatches: '(login|log-in|signin|sign-in|logga-in)' } },
+        check: { anyNode: { type: 'page', routeMatches: '(^|/)(login|log-in|signin|sign-in|logga-in)(/|$)' } },
         suggest: { path: 'app/login/page.tsx' },
       },
       {
@@ -93,7 +93,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'Sign-up page', sv: 'Sida för att skapa konto' },
         why: { en: 'New people need a way to create an account.', sv: 'Nya användare behöver ett sätt att skapa konto.' },
         nodeType: 'page',
-        check: { anyNode: { type: 'page', routeMatches: '(signup|sign-up|register|registrera|skapa-konto)' } },
+        check: { anyNode: { type: 'page', routeMatches: '(^|/)(signup|sign-up|register|registrera|skapa-konto)(/|$)' } },
         suggest: { path: 'app/signup/page.tsx' },
       },
       {
@@ -116,7 +116,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'Account page', sv: 'Kontosida' },
         why: { en: 'A logged-in person needs a page about themselves.', sv: 'Den som är inloggad behöver en sida om sig själv.' },
         nodeType: 'page',
-        check: { anyNode: { type: 'page', routeMatches: '(account|profile|settings|konto|profil|installningar)' } },
+        check: { anyNode: { type: 'page', routeMatches: '(^|/)(account|profile|settings|konto|profil|installningar)(/|$)' } },
         suggest: { path: 'app/account/page.tsx' },
       },
       {
@@ -124,7 +124,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'Table for user data', sv: 'Tabell för användardata' },
         why: { en: 'The app needs somewhere to keep what belongs to each user.', sv: 'Appen behöver ett ställe att spara det som hör till varje användare.' },
         nodeType: 'table',
-        check: { anyNode: { touchesTable: '^(profiles|users|accounts)$' } },
+        check: { anyNode: { touchesTable: '^(profiles?|users?|accounts?)$' } },
       },
       envExample,
       noSecrets,
@@ -141,7 +141,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'Pricing page', sv: 'Prissida' },
         why: { en: 'Customers want to see what it costs before they pay.', sv: 'Kunderna vill se vad det kostar innan de betalar.' },
         nodeType: 'page',
-        check: { anyNode: { type: 'page', routeMatches: '(pricing|prices|plans|priser|pris)' } },
+        check: { anyNode: { type: 'page', routeMatches: '(^|/)(pricing|prices|plans|priser|pris)(/|$)' } },
         suggest: { path: 'app/pricing/page.tsx' },
       },
       {
@@ -165,7 +165,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'Table for subscriptions', sv: 'Tabell för prenumerationer' },
         why: { en: 'The app must remember who has paid and until when.', sv: 'Appen måste komma ihåg vem som har betalat och till när.' },
         nodeType: 'table',
-        check: { anyNode: { touchesTable: '^(subscriptions|customers|payments)$' } },
+        check: { anyNode: { touchesTable: '^(subscriptions?|customers?|payments?)$' } },
       },
     ],
   },
@@ -196,7 +196,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'Create new', sv: 'Skapa ny' },
         why: { en: 'People need a way to add new things.', sv: 'Man behöver ett sätt att lägga till nya saker.' },
         nodeType: 'page',
-        check: { any: [{ anyNode: { type: 'page', routeMatches: '(new|create|ny|skapa)' } }, { anyNode: { type: 'server-action', nameMatches: '(create|add|insert)' } }] },
+        check: { any: [{ anyNode: { type: 'page', routeMatches: '(^|/)(new|create|ny|skapa)(/|$)' } }, { anyNode: { type: 'server-action', nameMatches: '(create|add|insert)' } }] },
         suggest: { path: 'app/items/new/page.tsx' },
       },
       {
@@ -204,7 +204,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'Edit', sv: 'Ändra' },
         why: { en: 'Mistakes need to be fixable.', sv: 'Fel måste gå att rätta.' },
         nodeType: 'page',
-        check: { any: [{ anyNode: { type: 'page', routeMatches: '(edit|andra|\\[[^/]+\\])' } }, { anyNode: { type: 'server-action', nameMatches: '(update|edit|save)' } }] },
+        check: { any: [{ anyNode: { type: 'page', routeMatches: '(^|/)(edit|andra)(/|$)|\\/\\[[^/]+\\]\\/(edit|andra)(/|$)' } }, { anyNode: { type: 'server-action', nameMatches: '(update|edit|save)' } }] },
         suggest: { path: 'app/items/[id]/edit/page.tsx' },
       },
       {

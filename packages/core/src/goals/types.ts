@@ -4,9 +4,9 @@ export interface NodeFilter {
   type?: NodeType;
   /** Regex (case-insensitive) on the node's route. */
   routeMatches?: string;
-  /** Service id ('stripe', 'supabase', …): the node or something it uses (up to 3 steps) talks to it. */
+  /** Service id ('stripe', 'supabase', …): the node or something it uses or calls over an API route (`uses`/`calls-api` edges, up to 3 steps) talks to it. */
   talksTo?: string;
-  /** Regex (case-insensitive) on a table name the node or something it uses (up to 3 steps) reads or writes. */
+  /** Regex (case-insensitive) on a table name the node or something it uses or calls over an API route (`uses`/`calls-api` edges, up to 3 steps) reads or writes. */
   touchesTable?: string;
   /** Regex (case-insensitive) on the node's label. */
   nameMatches?: string;

@@ -112,6 +112,66 @@ describe('evaluateGoal checks', () => {
   });
 });
 
+describe('evaluateGoal fix round 1', () => {
+  const node = (id: string, type: 'page' | 'api-route' | 'table' | 'service' | 'helper', extra: object = {}) => ({
+    id, type, zone: ({ page: 'pages', 'api-route': 'server', table: 'data', service: 'outside', helper: 'shared' } as const)[type], label: id, ...extra,
+  });
+  const only = (goalId: string, itemId: string, graph: PublicGraph) =>
+    evaluateGoal(findGoal(goalId)!, graph, () => false).items.find((i) => i.id === itemId)!;
+
+  it('accepts singular (Prisma-style) table names', () => {
+    const graph = g({
+      nodes: [node('page:a', 'page', { route: '/account' }), node('api-route:s', 'api-route', { route: '/api/s' }), node('table:user', 'table'), node('table:subscription', 'table')],
+      edges: [
+        { id: 'e1', from: 'page:a', to: 'table:user', kind: 'reads' },
+        { id: 'e2', from: 'api-route:s', to: 'table:subscription', kind: 'writes' },
+      ],
+    });
+    expect(only('webapp-auth', 'users-table', graph).done).toBe(true);
+    expect(only('saas-auth-payments', 'subscriptions-table', graph).done).toBe(true);
+  });
+
+  it('matches whole route segments only', () => {
+    const page = (route: string) => g({ nodes: [node('page:x', 'page', { route })] });
+    expect(only('saas-auth-payments', 'pricing-page', page('/enterprise')).done).toBe(false);
+    expect(only('saas-auth-payments', 'pricing-page', page('/company')).done).toBe(false);
+    expect(only('saas-auth-payments', 'pricing-page', page('/pricing')).done).toBe(true);
+    expect(only('webapp-auth', 'login-page', page('/login')).done).toBe(true);
+    expect(only('webapp-auth', 'login-page', page('/blogin')).done).toBe(false);
+    expect(only('landing-page', 'contact', page('/news')).done).toBe(false);
+    expect(only('crud-app', 'create', page('/items/new')).done).toBe(true);
+    expect(only('crud-app', 'create', page('/news')).done).toBe(false);
+    expect(only('crud-app', 'edit', page('/items/[id]/edit')).done).toBe(true);
+    expect(only('crud-app', 'edit', page('/blog/[slug]')).done).toBe(false);
+  });
+
+  it('follows calls-api edges too for talksTo and touchesTable', () => {
+    const graph = g({
+      nodes: [node('page:l', 'page', { route: '/items' }), node('api-route:i', 'api-route', { route: '/api/items' }), node('table:items', 'table'), node('service:stripe', 'service')],
+      edges: [
+        { id: 'e1', from: 'page:l', to: 'api-route:i', kind: 'calls-api' },
+        { id: 'e2', from: 'api-route:i', to: 'table:items', kind: 'reads' },
+        { id: 'e3', from: 'api-route:i', to: 'service:stripe', kind: 'talks-to' },
+      ],
+    });
+    expect(only('crud-app', 'list-page', graph)).toMatchObject({ done: true, matchedNodeIds: ['page:l'] });
+    const t: GoalTemplate = { id: 't', title: { en: 't', sv: 't' }, description: { en: '', sv: '' }, items: [{ id: 'i', title: { en: 'i', sv: 'i' }, why: { en: 'w', sv: 'w' }, check: { anyNode: { type: 'page', talksTo: 'stripe' } } }] };
+    expect(evaluateGoal(t, graph, () => false).items[0].done).toBe(true);
+  });
+
+  it('evaluates a 1500-node graph with 6000 edges quickly', () => {
+    const N = 1500;
+    const nodes = Array.from({ length: N }, (_, i) => node(`helper:n${i}`, 'helper', { route: `/r${i}` }));
+    const edges: PublicGraph['edges'] = [];
+    for (let i = 0; i < N; i++) for (let k = 1; k <= 4; k++) edges.push({ id: `e${i}-${k}`, from: `helper:n${i}`, to: `helper:n${(i * 4 + k) % N}`, kind: 'uses' });
+    const graph = g({ nodes, edges });
+    const start = performance.now();
+    const s = evaluateGoal(findGoal('saas-auth-payments')!, graph, () => false);
+    expect(performance.now() - start).toBeLessThan(200);
+    expect(s.total).toBeGreaterThan(0);
+  });
+});
+
 describe('goal file', () => {
   it('reads and writes one line', () => {
     expect(formatGoalFile('saas-auth-payments')).toBe('goal: saas-auth-payments\n');

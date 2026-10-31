@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { runDaemonCommand, runStatus, runStop } from './commands';
 import { runHook } from './hooks/run';
+import { runMcp } from './mcp/server';
 import { runLock, runLocks, runUnlock } from './lock-commands';
 import { runScan } from './scan';
 
@@ -13,6 +14,7 @@ const USAGE = [
   '  mapskill lock <path...> [--label text]   Claude must ask before changing these files or folders',
   '  mapskill unlock <path...>',
   '  mapskill locks [dir]',
+  '  mapskill mcp             MCP server for Claude Code (stdio)',
   '  mapskill hook <event>    used by the Claude Code plugin (reads the hook JSON on stdin)',
   '',
 ].join('\n');
@@ -38,6 +40,7 @@ const commands: Record<string, () => number | Promise<number>> = {
   lock: () => runLock(rest),
   unlock: () => runUnlock(rest),
   locks: () => runLocks(rest),
+  mcp: () => runMcp(),
   hook: async () => {
     const result = await runHook(rest[0] ?? '', { stdin: process.stdin, env: process.env });
     if (result.stdout) process.stdout.write(result.stdout);

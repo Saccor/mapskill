@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assignSlots } from './layout';
-import { mergeForSave, restorableSlots } from './slots';
+import { computeSlots, mergeForSave, restorableSlots } from './slots';
 
 describe('mergeForSave', () => {
   it('keeps slots of parts that are gone and lets current ones win', () => {
@@ -29,5 +29,16 @@ describe('restorableSlots', () => {
   it('only compares within the same zone', () => {
     const nodes = [{ id: 'x', zone: 'blocks' as const }, { id: 'y', zone: 'server' as const }];
     expect(restorableSlots({ y: 3 }, { x: 3, y: 3 }, nodes).x).toBe(3);
+  });
+});
+
+describe('computeSlots', () => {
+  const node = (id: string) => ({ id, zone: 'blocks' as const });
+  it('keeps a fresh slot when a part with a lower id arrives before any save', () => {
+    const first = computeSlots([node('y')], {}, {}, {});
+    expect(first).toEqual({ y: 0 });
+    const second = computeSlots([node('w'), node('y')], {}, {}, first);
+    expect(second.y).toBe(0);
+    expect(second.w).toBe(1);
   });
 });

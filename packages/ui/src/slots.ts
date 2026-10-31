@@ -38,6 +38,16 @@ export function restorableSlots(
   return out;
 }
 
+/** Slots for the current parts: parts already placed keep their last computed slot even before it is saved. */
+export function computeSlots(
+  nodes: { id: string; zone: Zone }[],
+  saved: Record<string, number>,
+  lastSaved: Record<string, number>,
+  prevSlots: Record<string, number>,
+): Record<string, number> {
+  return assignSlots(nodes, restorableSlots(prevSlots, { ...saved, ...lastSaved, ...prevSlots }, nodes));
+}
+
 /** Slots for every part: saved ones from .mapskill/layout.json, new ones assigned and saved after a quiet second. */
 export function useSlots(graph: PublicGraph | null, api: Api): Record<string, number> {
   const [saved, setSaved] = useState<Record<string, number> | null>(null);
@@ -73,7 +83,7 @@ export function useSlots(graph: PublicGraph | null, api: Api): Record<string, nu
   const slots = useMemo(
     () =>
       graph
-        ? assignSlots(graph.nodes, restorableSlots(prevSlots.current, { ...(saved ?? {}), ...lastSaved.current }, graph.nodes))
+        ? computeSlots(graph.nodes, saved ?? {}, lastSaved.current, prevSlots.current)
         : {},
     [graph, saved],
   );

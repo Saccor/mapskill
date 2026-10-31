@@ -45,7 +45,7 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
     const layout = layoutMap(graph.nodes, slots, collapsed);
     const flags = partFlags(graph, state, now);
     const findings = findingsByNode(graph);
-        const out: Node[] = layout.zones.map((z) => ({
+    const out: Node[] = layout.zones.map((z) => ({
       id: `zone:${z.zone}`,
       type: 'zone',
       position: { x: z.x, y: z.y },

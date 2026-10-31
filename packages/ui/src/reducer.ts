@@ -61,6 +61,8 @@ function onServer(state: MapState, m: ServerMessage): MapState {
       return { ...state, requests: m.requests };
     case 'locks':
       return { ...state, locks: m.locks, lockedFiles: m.lockedFiles };
+    case 'goal':
+      return state; // The goal panel (a later M5 task) will keep this in state.
   }
 }
 

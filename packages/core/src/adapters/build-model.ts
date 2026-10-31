@@ -1,5 +1,6 @@
 import path from 'node:path';
-import type { EdgeKind, FileFacts, Framework, MapEdge, MapNode, NodeType, Zone } from '../model/types';
+import type { EdgeKind, FileFacts, Framework, MapEdge, MapNode, NodeType } from '../model/types';
+import { ZONE_OF_TYPE } from '../model/zones';
 import { isTestFile, isToolingConfig } from './file-kinds';
 import { routeFileInfo, routeMatches } from './nextjs/routes';
 import { serviceForSpecifier } from './nextjs/services';
@@ -19,20 +20,6 @@ export interface Model {
   owner: (file: string, fn?: string) => string | undefined;
 }
 
-const ZONE: Record<NodeType, Zone> = {
-  page: 'pages',
-  layout: 'pages',
-  'api-route': 'server',
-  'server-action': 'server',
-  config: 'server',
-  component: 'blocks',
-  helper: 'shared',
-  file: 'shared',
-  table: 'data',
-  service: 'outside',
-  test: 'tests',
-};
-
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 export function buildModel(input: ModelInput): Model {
@@ -43,7 +30,7 @@ export function buildModel(input: ModelInput): Model {
 
   const add = (n: Omit<MapNode, 'zone'>): string => {
     if (!byId.has(n.id)) {
-      const full: MapNode = { ...n, zone: ZONE[n.type] };
+      const full: MapNode = { ...n, zone: ZONE_OF_TYPE[n.type] };
       nodes.push(full);
       byId.set(n.id, full);
     }

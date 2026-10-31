@@ -25,3 +25,8 @@ export * from './model/protocol';
 export { findSimilar, nameWords, type SimilarMatch, type SimilarQuery } from './agent/similar';
 export { mapOverview } from './agent/overview';
 export { nodeDetails } from './agent/details';
+export { BUILTIN_GOALS } from './goals/builtin';
+export { evaluateGoal, findGoal, goalSummaries } from './goals/evaluate';
+export { formatGoalFile, parseGoalFile } from './goals/goal-file';
+export type { GoalCheck, GoalItem, GoalTemplate, NodeFilter } from './goals/types';
+export { ZONE_OF_TYPE } from './model/zones';

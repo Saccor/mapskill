@@ -3,3 +3,4 @@ export * from './model/types';
 export * from './model/protocol';
 export { applyDelta, type GraphDelta, type PublicGraph } from './graph/delta';
 export { ZONE_LABELS } from './text/labels';
+export { ZONE_OF_TYPE } from './model/zones';

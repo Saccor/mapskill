@@ -1,5 +1,36 @@
 import type { GraphDelta, PublicGraph } from '../graph/delta';
-import type { Finding } from './types';
+import type { Finding, NodeType, Text, Zone } from './types';
+
+export interface GoalItemStatus {
+  id: string;
+  title: Text;
+  why: Text;
+  done: boolean;
+  nodeType?: NodeType;
+  zone?: Zone;
+  suggestPath?: string;
+  /** Up to 5 nodes that satisfied an anyNode check. */
+  matchedNodeIds: string[];
+}
+
+export interface GoalStatus {
+  goalId: string;
+  title: Text;
+  items: GoalItemStatus[];
+  done: number;
+  total: number;
+}
+
+export interface GoalSummary {
+  id: string;
+  title: Text;
+  description: Text;
+}
+
+export interface GoalAnswer {
+  goals: GoalSummary[];
+  status: GoalStatus | null;
+}
 
 /** Answer to POST /api/stop: what the Stop hook should tell Claude. */
 export interface StopAnswer {
@@ -25,7 +56,7 @@ export interface LockInfo {
   lockedAt: number;
 }
 
-export type RequestKind = 'explain' | 'fix' | 'custom';
+export type RequestKind = 'explain' | 'fix' | 'custom' | 'build';
 export type RequestStatus = 'pending' | 'sent' | 'cancelled';
 
 /** A request the user queued in the map for Claude. */
@@ -67,7 +98,8 @@ export type ServerMessage =
   | { type: 'activity'; at: number; files: ActivityFile[] }
   | { type: 'turn'; at: number; sessionId: string }
   | { type: 'requests'; requests: MapRequest[] }
-  | { type: 'locks'; locks: LockInfo[]; lockedFiles: string[] };
+  | { type: 'locks'; locks: LockInfo[]; lockedFiles: string[] }
+  | { type: 'goal'; status: GoalStatus | null };
 
 /** The only message a client sends: it must be the first one. */
 export type ClientMessage = { type: 'hello'; token: string };

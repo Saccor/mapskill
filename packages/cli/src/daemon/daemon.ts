@@ -3,11 +3,15 @@ import path from 'node:path';
 import {
   applyFileChanges,
   findDrift,
+  findSimilar,
   loadProject,
+  mapOverview,
+  nodeDetails,
   toPublicGraph,
   type DaemonStatus,
   type Project,
   type PublicGraph,
+  type StopAnswer,
 } from '@mapskill/core';
 import { canonicalRoot, toProjectRel } from '../project-path';
 import { readFactsCache, writeFactsCache } from './cache';
@@ -17,6 +21,11 @@ import { ChangeQueue, type ChangeBatch } from './queue';
 import { startServer } from './server';
 import { TurnTracker } from './turns';
 import { watchProject, type ProjectWatcher } from './watcher';
+
+/** Changed paths remembered for attributing Bash edits to Claude. */
+const MAX_RECENT_CHANGES = 5000;
+/** Findings the Stop hook shows Claude at most. */
+const MAX_STOP_FINDINGS = 5;
 
 export { toProjectRel } from '../project-path';
 
@@ -54,6 +63,8 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
   const token = randomBytes(24).toString('hex');
   const turns = new TurnTracker();
   const timers: ReturnType<typeof setInterval>[] = [];
+  /** Recently changed project paths with the time they were applied, oldest first. */
+  const recentChanges: { path: string; at: number }[] = [];
   let project: Project | undefined;
   let seq = 0;
   let lastActivity = Date.now();
@@ -103,6 +114,9 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
         scheduleCacheSave();
       }
       const relevant = batch.paths.filter((p) => known.has(p) || p in current.facts || current.skipped.has(p));
+      const at = Date.now();
+      for (const p of relevant) recentChanges.push({ path: p, at });
+      if (recentChanges.length > MAX_RECENT_CHANGES) recentChanges.splice(0, recentChanges.length - MAX_RECENT_CHANGES);
       if (relevant.length > 0) {
         const claude = new Set(batch.byClaude);
         server.broadcast({
@@ -153,12 +167,26 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       const graph = await graphNow();
       return { type: 'graph', seq, graph };
     },
-    touched: async ({ files, sessionId }) => {
+    touched: async ({ files, sessionId, bash }) => {
       await loaded;
       if (stopping) return;
+      const session = sessionId ?? 'default';
       const rels = files.map((f) => toProjectRel(root, f)).filter((r): r is string => r !== null);
-      turns.touch(sessionId ?? 'default', rels, currentFindingIds());
+      // Start the turn (and take its baseline) before anything from this tool use is applied.
+      const turnId = turns.touch(session, rels, currentFindingIds());
       for (const rel of rels) queue.add(rel, 'claude');
+      const since = turns.markReported(turnId, Date.now());
+      if (!bash) return;
+      // A Bash command gives no file list: apply what changed on disk now and attribute it to Claude.
+      queue.flushNow();
+      try {
+        for (const rel of findDrift(project!)) queue.add(rel, 'claude');
+      } catch (err) {
+        log(`drift check failed: ${String(err)}`);
+      }
+      queue.flushNow();
+      const changed = [...new Set(recentChanges.filter((c) => c.at >= since).map((c) => c.path))];
+      if (changed.length > 0) turns.touch(session, changed, currentFindingIds());
     },
     startTurn: async (sessionId) => {
       await loaded;
@@ -168,10 +196,28 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     findings: async ({ since, session, ...query }) => {
       await loaded;
       queue.flushNow();
-      const turnId = since ?? (session === undefined ? undefined : turns.currentTurn(session));
+      const sessionId = session === 'latest' ? turns.latestSession() : session;
+      const turnId = since ?? (sessionId === undefined ? undefined : turns.currentTurn(sessionId));
       if (turnId === undefined || !turns.hasTurn(turnId)) return { findings: [], turnId, unknownTurn: true };
       return { findings: turns.newFindings(turnId, project!.graph.findings, query), turnId, unknownTurn: false };
     },
+    stopCheck: async (sessionId): Promise<StopAnswer> => {
+      await loaded;
+      queue.flushNow();
+      const turnId = turns.currentTurn(sessionId);
+      if (turnId === undefined) return { unknownTurn: true, alreadyReported: false, total: 0, findings: [] };
+      const found = turns.newFindings(turnId, project!.graph.findings, { touchedOnly: true, certainty: 'certain' });
+      if (found.length === 0) return { turnId, unknownTurn: false, alreadyReported: false, total: 0, findings: [] };
+      if (!turns.claimStop(turnId)) return { turnId, unknownTurn: false, alreadyReported: true, total: found.length, findings: [] };
+      return { turnId, unknownTurn: false, alreadyReported: false, total: found.length, findings: found.slice(0, MAX_STOP_FINDINGS) };
+    },
+    overview: async (maxNodes) => mapOverview(await graphNow(), { maxNodes }),
+    similar: async (query) => {
+      await loaded;
+      queue.flushNow();
+      return findSimilar(project!.graph.files, project!.graph.nodes, query);
+    },
+    node: async (query) => nodeDetails(await graphNow(), query),
     shutdown: () => {
       void stop('shutdown request');
     },

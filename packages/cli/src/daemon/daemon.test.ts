@@ -197,6 +197,55 @@ describe('startDaemon', () => {
     expect(performance.now() - started).toBeLessThan(2000);
     client.close();
   }, 60_000);
+
+  it('blocks the stop once per turn and only for certain findings in touched files', async () => {
+    const root = tmpProject(files());
+    const h = await start(root, { watch: false });
+    type Stop = { turnId?: string; unknownTurn: boolean; alreadyReported: boolean; total: number; findings: Finding[] };
+    expect(await request<Stop>(h.info, 'POST', '/api/stop', { sessionId: 's1' })).toMatchObject({ unknownTurn: true, total: 0 });
+    await request(h.info, 'POST', '/api/turn', { sessionId: 's1' });
+    expect(await request<Stop>(h.info, 'POST', '/api/stop', { sessionId: 's1' })).toMatchObject({ unknownTurn: false, total: 0 });
+    write(root, 'lib/b.ts', fn('sumB'));
+    await request(h.info, 'POST', '/api/touched', { files: [path.join(root, 'lib/b.ts')], sessionId: 's1' });
+    const first = await request<Stop>(h.info, 'POST', '/api/stop', { sessionId: 's1' });
+    expect(first.alreadyReported).toBe(false);
+    expect(first.total).toBeGreaterThan(0);
+    expect(first.findings.every((f) => f.certainty === 'certain' && f.files.includes('lib/b.ts'))).toBe(true);
+    const second = await request<Stop>(h.info, 'POST', '/api/stop', { sessionId: 's1' });
+    expect(second).toMatchObject({ alreadyReported: true, findings: [] });
+    await request(h.info, 'POST', '/api/turn', { sessionId: 's1' });
+    expect(await request<Stop>(h.info, 'POST', '/api/stop', { sessionId: 's1' })).toMatchObject({ total: 0 });
+  });
+
+  it('counts files changed by a Bash command as touched by Claude', async () => {
+    const root = tmpProject(files());
+    const h = await start(root, { watch: false });
+    await request(h.info, 'POST', '/api/turn', { sessionId: 's1' });
+    write(root, 'lib/c.ts', fn('sumC')); // as if `cp lib/a.ts lib/c.ts` ran in Bash: no file list from the hook
+    await request(h.info, 'POST', '/api/touched', { files: [], sessionId: 's1', bash: true });
+    const stop = await request<{ findings: Finding[] }>(h.info, 'POST', '/api/stop', { sessionId: 's1' });
+    expect(stop.findings.some((f) => f.kind.endsWith('-duplicate') && f.files.includes('lib/c.ts'))).toBe(true);
+  });
+
+  it('answers findings for the latest session', async () => {
+    const root = tmpProject(files());
+    const h = await start(root, { watch: false });
+    await request(h.info, 'POST', '/api/turn', { sessionId: 'old' });
+    const { turnId } = await request<{ turnId: string }>(h.info, 'POST', '/api/turn', { sessionId: 'new' });
+    const answer = await request<{ turnId?: string }>(h.info, 'GET', '/api/findings?session=latest');
+    expect(answer.turnId).toBe(turnId);
+  });
+
+  it('serves the overview, similar functions and node details', async () => {
+    const root = tmpProject(files());
+    const h = await start(root, { watch: false });
+    const { text } = await request<{ text: string }>(h.info, 'GET', '/api/overview');
+    expect(text).toContain('sumA [helper]');
+    const { matches } = await request<{ matches: { name: string; file: string }[] }>(h.info, 'POST', '/api/similar', { code: fn('other') });
+    expect(matches[0]).toMatchObject({ name: 'sumA', file: 'lib/a.ts' });
+    const node = await request<{ text: string }>(h.info, 'GET', '/api/node?path=lib/a.ts');
+    expect(node.text).toContain('sumA');
+  });
 });
 
 describe('daemon lifecycle', () => {

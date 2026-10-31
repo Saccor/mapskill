@@ -78,3 +78,36 @@ describe('TurnTracker', () => {
     expect(t.currentTurn('s1000')).toBeDefined();
   });
 });
+
+describe('TurnTracker for the plugin', () => {
+  it('remembers the latest session', () => {
+    const t = new TurnTracker();
+    expect(t.latestSession()).toBeUndefined();
+    t.startTurn('a', []);
+    t.startTurn('b', []);
+    expect(t.latestSession()).toBe('b');
+    t.touch('a', ['x.ts'], []);
+    expect(t.latestSession()).toBe('a');
+  });
+
+  it('claims the stop report once per turn', () => {
+    const t = new TurnTracker();
+    const first = t.startTurn('s', []);
+    expect(t.claimStop(first)).toBe(true);
+    expect(t.claimStop(first)).toBe(false);
+    const second = t.startTurn('s', []);
+    expect(t.claimStop(second)).toBe(true);
+    expect(t.claimStop('unknown')).toBe(false);
+  });
+
+  it('returns the previous report time, starting at the turn start', () => {
+    const t = new TurnTracker();
+    const before = Date.now();
+    const id = t.startTurn('s', []);
+    const start = t.markReported(id, before + 1000);
+    expect(start).toBeGreaterThanOrEqual(before);
+    expect(start).toBeLessThanOrEqual(before + 1000);
+    expect(t.markReported(id, before + 2000)).toBe(before + 1000);
+    expect(t.markReported('unknown', 5)).toBe(5);
+  });
+});

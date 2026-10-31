@@ -7,6 +7,10 @@ interface Turn {
   baseline: Set<string>;
   /** Files Claude reported touching during the turn. */
   touched: Set<string>;
+  /** When Claude last reported a tool use in this turn (the turn start before the first report). */
+  reportedAt: number;
+  /** True once the Stop hook has blocked Claude with findings in this turn. */
+  stopReported: boolean;
 }
 
 export interface FindingQuery {
@@ -26,11 +30,13 @@ export class TurnTracker {
   /** Turn ids per session, oldest first. */
   private readonly bySession = new Map<string, string[]>();
   private readonly current = new Map<string, string>();
+  private latest: string | undefined;
 
   startTurn(sessionId: string, currentFindingIds: Iterable<string>): string {
     const id = randomUUID();
-    this.turns.set(id, { sessionId, baseline: new Set(currentFindingIds), touched: new Set() });
+    this.turns.set(id, { sessionId, baseline: new Set(currentFindingIds), touched: new Set(), reportedAt: Date.now(), stopReported: false });
     this.current.set(sessionId, id);
+    this.latest = sessionId;
     const ids = this.bySession.get(sessionId) ?? [];
     ids.push(id);
     this.bySession.set(sessionId, ids);
@@ -63,10 +69,33 @@ export class TurnTracker {
 
   /** Records touched files in the session's current turn, starting one if needed. Returns the turn id. */
   touch(sessionId: string, files: string[], currentFindingIds: Iterable<string>): string {
+    this.latest = sessionId;
     const id = this.currentTurn(sessionId) ?? this.startTurn(sessionId, currentFindingIds);
     const turn = this.turns.get(id)!;
     for (const file of files) turn.touched.add(file);
     return id;
+  }
+
+  /** The session that most recently started a turn or touched a file. */
+  latestSession(): string | undefined {
+    return this.latest;
+  }
+
+  /** Records a tool report at `at` and returns the previous one (the turn start if none). Unknown turns return `at`. */
+  markReported(turnId: string, at: number): number {
+    const turn = this.turns.get(turnId);
+    if (!turn) return at;
+    const previous = turn.reportedAt;
+    turn.reportedAt = at;
+    return previous;
+  }
+
+  /** True the first time per turn: the Stop hook may block Claude once. */
+  claimStop(turnId: string): boolean {
+    const turn = this.turns.get(turnId);
+    if (!turn || turn.stopReported) return false;
+    turn.stopReported = true;
+    return true;
   }
 
   newFindings(turnId: string, findings: Finding[], query: FindingQuery = {}): Finding[] {

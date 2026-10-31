@@ -1,4 +1,18 @@
 import type { GraphDelta, PublicGraph } from '../graph/delta';
+import type { Finding } from './types';
+
+/** Answer to POST /api/stop: what the Stop hook should tell Claude. */
+export interface StopAnswer {
+  turnId?: string;
+  /** True when the session has no turn the daemon knows (then nothing is reported). */
+  unknownTurn: boolean;
+  /** True when this turn already blocked Claude once; `findings` is then empty. */
+  alreadyReported: boolean;
+  /** How many new certain findings Claude's files have in this turn. */
+  total: number;
+  /** At most 5 of them. */
+  findings: Finding[];
+}
 
 export interface ActivityFile {
   path: string;

@@ -13,7 +13,7 @@ const emptyGraph: PublicGraph = {
 };
 
 function fakeDeps(over: Partial<ServerDeps> = {}) {
-  const calls = { touched: [] as unknown[], findings: [] as unknown[], shutdown: 0, activity: 0 };
+  const calls = { touched: [] as unknown[], findings: [] as unknown[], shutdown: 0, activity: 0, stop: [] as unknown[] };
   const deps: ServerDeps = {
     token: TOKEN,
     status: () => ({ ok: true, root: '/p', pid: process.pid, version: 'test', ready: true, fileCount: 0, clients: 0, seq: 0 }),
@@ -28,6 +28,13 @@ function fakeDeps(over: Partial<ServerDeps> = {}) {
       const turnId = query.since ?? (query.session === 's1' ? 'turn-1' : undefined);
       return { findings: [], turnId, unknownTurn: turnId !== 'turn-1' };
     },
+    stopCheck: async (sessionId) => {
+      calls.stop.push(sessionId);
+      return { turnId: 'turn-1', unknownTurn: false, alreadyReported: false, total: 0, findings: [] };
+    },
+    overview: async (maxNodes) => `overview ${maxNodes ?? 'default'}`,
+    similar: async (q) => [{ name: q.name ?? 'x', file: 'lib/a.ts', startLine: 1, endLine: 2, score: 0.9, reason: 'similar-name' }],
+    node: async (q) => (q.id === 'known' || q.path === 'lib/a.ts' ? 'details' : null),
     shutdown: () => {
       calls.shutdown++;
     },
@@ -206,5 +213,34 @@ describe('request helper', () => {
       html.closeAllConnections();
       await new Promise<void>((resolve) => html.close(() => resolve()));
     }
+  });
+});
+
+describe('plugin routes', () => {
+  it('passes bash and session through /api/touched and answers /api/stop', async () => {
+    const { deps, calls } = fakeDeps();
+    server = await startServer(deps);
+    const info = { port: server.port, token: TOKEN };
+    await request(info, 'POST', '/api/touched', { files: [], sessionId: 's1', bash: true });
+    expect(calls.touched[0]).toEqual({ files: [], toolUseId: undefined, sessionId: 's1', bash: true });
+    expect(await request(info, 'POST', '/api/stop', { sessionId: 's1' })).toMatchObject({ turnId: 'turn-1', total: 0 });
+    await request(info, 'POST', '/api/stop', {});
+    expect(calls.stop).toEqual(['s1', 'default']);
+  });
+
+  it('serves overview, similar and node', async () => {
+    server = await startServer(fakeDeps().deps);
+    const info = { port: server.port, token: TOKEN };
+    expect(await request(info, 'GET', '/api/overview')).toEqual({ text: 'overview default' });
+    expect(await request(info, 'GET', '/api/overview?maxNodes=12')).toEqual({ text: 'overview 12' });
+    await expect(request(info, 'GET', '/api/overview?maxNodes=0')).rejects.toMatchObject({ status: 400 });
+    const { matches } = await request<{ matches: { name: string }[] }>(info, 'POST', '/api/similar', { name: 'formatDate' });
+    expect(matches[0].name).toBe('formatDate');
+    await expect(request(info, 'POST', '/api/similar', { code: 'x'.repeat(20_001) })).rejects.toMatchObject({ status: 400 });
+    await expect(request(info, 'POST', '/api/similar', { name: 3 })).rejects.toMatchObject({ status: 400 });
+    expect(await request(info, 'GET', '/api/node?id=known')).toEqual({ text: 'details' });
+    expect(await request(info, 'GET', '/api/node?path=lib%2Fa.ts')).toEqual({ text: 'details' });
+    await expect(request(info, 'GET', '/api/node?id=nope')).rejects.toMatchObject({ status: 404 });
+    await expect(request(info, 'GET', '/api/node')).rejects.toMatchObject({ status: 400 });
   });
 });

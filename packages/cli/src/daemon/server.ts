@@ -1,7 +1,17 @@
 import { timingSafeEqual } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { Certainty, ClientMessage, DaemonStatus, Finding, PublicGraph, ServerMessage } from '@mapskill/core';
+import type {
+  Certainty,
+  ClientMessage,
+  DaemonStatus,
+  Finding,
+  PublicGraph,
+  ServerMessage,
+  SimilarMatch,
+  SimilarQuery,
+  StopAnswer,
+} from '@mapskill/core';
 import { WebSocket, WebSocketServer } from 'ws';
 
 export interface FindingsQuery {
@@ -23,13 +33,20 @@ export interface ServerDeps {
   graph(): Promise<PublicGraph>;
   /** First message for a client that said hello: the full graph. */
   hello(): Promise<ServerMessage>;
-  touched(input: { files: string[]; toolUseId?: string; sessionId?: string }): Promise<void>;
+  touched(input: { files: string[]; toolUseId?: string; sessionId?: string; bash?: boolean }): Promise<void>;
   startTurn(sessionId: string): Promise<string>;
   /**
    * New findings for a turn, given by id (`since`) or as the current turn of a session (`session`); `since` wins when
-   * both are given. `unknownTurn` is true (and `findings` empty) when the turn is not known or the session has none.
+   * both are given. `session` may be `latest`: the session that most recently started a turn or touched a file.
+   * `unknownTurn` is true (and `findings` empty) when the turn is not known or the session has none.
    */
   findings(query: FindingsQuery): Promise<FindingsAnswer>;
+  /** The Stop hook's question: new certain findings in Claude's files this turn, reported once per turn. */
+  stopCheck(sessionId: string): Promise<StopAnswer>;
+  overview(maxNodes?: number): Promise<string>;
+  similar(query: SimilarQuery): Promise<SimilarMatch[]>;
+  /** Text about a node (by id) or the nodes of a file (by path); null when nothing matches. */
+  node(query: { id?: string; path?: string }): Promise<string | null>;
   shutdown(): void;
   /** Called for every authenticated request or message (keeps the daemon from idling out). */
   activity(): void;
@@ -43,6 +60,7 @@ export interface DaemonServer {
 }
 
 const MAX_BODY_BYTES = 1_000_000;
+const MAX_SNIPPET_CHARS = 20_000;
 
 class HttpError extends Error {
   constructor(
@@ -107,7 +125,12 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
         const body = await readBody(req);
         const files = body.files;
         if (!Array.isArray(files) || !files.every((f) => typeof f === 'string')) throw new HttpError(400, 'files must be a list of strings');
-        await deps.touched({ files: files as string[], toolUseId: optionalString(body.toolUseId), sessionId: optionalString(body.sessionId) });
+        await deps.touched({
+          files: files as string[],
+          toolUseId: optionalString(body.toolUseId),
+          sessionId: optionalString(body.sessionId),
+          ...(body.bash === true ? { bash: true } : {}),
+        });
         return send(res, 200, { ok: true });
       }
       case 'POST /api/turn': {
@@ -126,6 +149,34 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
           ...(certainty ? { certainty } : {}),
         });
         return send(res, 200, answer);
+      }
+      case 'POST /api/stop': {
+        const body = await readBody(req);
+        return send(res, 200, await deps.stopCheck(optionalString(body.sessionId) ?? 'default'));
+      }
+      case 'GET /api/overview': {
+        const raw = url.searchParams.get('maxNodes');
+        const maxNodes = raw === null ? undefined : Number(raw);
+        if (maxNodes !== undefined && (!Number.isInteger(maxNodes) || maxNodes < 1 || maxNodes > 500)) {
+          throw new HttpError(400, 'maxNodes must be a whole number from 1 to 500');
+        }
+        return send(res, 200, { text: await deps.overview(maxNodes) });
+      }
+      case 'POST /api/similar': {
+        const body = await readBody(req);
+        if ((body.name !== undefined && typeof body.name !== 'string') || (body.code !== undefined && typeof body.code !== 'string')) {
+          throw new HttpError(400, 'name and code must be strings');
+        }
+        if (typeof body.code === 'string' && body.code.length > MAX_SNIPPET_CHARS) throw new HttpError(400, 'code is too long');
+        return send(res, 200, { matches: await deps.similar({ name: body.name as string | undefined, code: body.code as string | undefined }) });
+      }
+      case 'GET /api/node': {
+        const id = url.searchParams.get('id') ?? undefined;
+        const p = url.searchParams.get('path') ?? undefined;
+        if (!id && !p) throw new HttpError(400, 'id or path is required');
+        const text = await deps.node(id ? { id } : { path: p });
+        if (text === null) throw new HttpError(404, 'no such node');
+        return send(res, 200, { text });
       }
       case 'POST /api/shutdown':
         send(res, 200, { ok: true });

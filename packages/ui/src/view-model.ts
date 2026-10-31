@@ -10,7 +10,7 @@ export function findingsByNode(graph: PublicGraph): Record<string, Finding[]> {
   return out;
 }
 
-export type PartFlags = { pulsing: boolean; touched: boolean; locked: boolean; unreadable: boolean };
+export type PartFlags = { pulsing: boolean; touched: boolean; locked: boolean; unreadable: boolean; ghost: boolean };
 
 export function partFlags(
   graph: PublicGraph,
@@ -28,6 +28,7 @@ export function partFlags(
       touched: f !== undefined && touched.has(f),
       locked: f !== undefined && locked.has(f),
       unreadable: f !== undefined && unreadable.has(f),
+      ghost: n.planned === true,
     };
   }
   return out;

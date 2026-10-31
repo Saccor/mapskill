@@ -53,6 +53,9 @@ button { font: inherit; color: inherit; }
 .unreadable-line { color: var(--warn); font-weight: 600; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .part .lock { font-size: 0.75em; color: var(--muted); }
+.part.ghost { border-style: dashed; border-width: 2px; background: transparent; color: var(--muted); }
+.part.ghost .label { font-style: italic; }
+.ghost-badge { font-size: 0.75em; border: 1px dashed var(--border); border-radius: 4px; padding: 0 4px; }
 .part.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .part.touched { border: 2px dashed var(--accent); }
 .part.pulsing { animation: pulse 1.2s ease-in-out infinite; }

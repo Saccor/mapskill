@@ -10,26 +10,29 @@ export type PartData = {
   pulsing: boolean;
   touched: boolean;
   locked: boolean;
+  ghost: boolean;
   unreadable: boolean;
   selected: boolean;
   ariaLabel: string;
   lockedText: string;
   unreadableText: string;
+  missingText: string;
   onSelect: (id: string) => void;
   onFocusPart: (id: string) => void;
 };
 
 function PartNodeView({ data }: NodeProps<Node<PartData>>) {
-  const cls = ['part', data.pulsing && 'pulsing', data.touched && 'touched', data.selected && 'selected', data.findingCount > 0 && 'has-findings']
+  const cls = ['part', data.ghost && 'ghost', data.pulsing && 'pulsing', data.touched && 'touched', data.selected && 'selected', data.findingCount > 0 && 'has-findings']
     .filter(Boolean)
     .join(' ');
   return (
     <>
       <Handle type="target" position={Position.Left} isConnectable={false} className="part-handle" />
       <button className={cls} aria-pressed={data.selected} aria-label={data.ariaLabel} data-node-id={data.node.id} onClick={() => data.onSelect(data.node.id)} onFocus={() => data.onFocusPart(data.node.id)}>
-        <span aria-hidden="true">{NODE_ICON[data.node.type]}</span>
+        <span aria-hidden="true">{data.ghost ? '+' : NODE_ICON[data.node.type]}</span>
         <span className="label">{data.node.label}</span>
-        {data.health < 10 && <span className="badge">{data.health}/10</span>}
+        {data.ghost && <span className="ghost-badge" aria-hidden="true">{data.missingText}</span>}
+        {!data.ghost && data.health < 10 && <span className="badge">{data.health}/10</span>}
         {data.findingCount > 0 && <span className="warn" aria-hidden="true">⚠ {data.findingCount}</span>}
         {data.unreadable && <span className="unreadable" aria-hidden="true">⚠ {data.unreadableText}</span>}
         {data.locked && <span className="lock" aria-hidden="true">🔒 {data.lockedText}</span>}

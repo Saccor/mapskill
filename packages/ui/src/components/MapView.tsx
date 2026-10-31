@@ -51,7 +51,7 @@ export interface MapViewProps {
 /** A part before the cheap per-render flags are added: everything that only changes with the graph, slots, folds or language. */
 interface PartSkeleton {
   node: Node;
-  data: Omit<PartData, 'pulsing' | 'touched' | 'locked' | 'selected' | 'ariaLabel'>;
+  data: Omit<PartData, 'pulsing' | 'touched' | 'locked' | 'ghost' | 'selected' | 'ariaLabel'>;
   /** Label pieces before and after the lock text, so the lock can be added without rebuilding the rest. */
   ariaBefore: string;
   ariaAfter: string;
@@ -145,11 +145,13 @@ function MapViewInner({ graph, state, slots, selectedId, onSelect, showAllEdges,
         const count = findings[n.id]?.length ?? 0;
         const health = graph.health[n.id] ?? 10;
         const isUnreadable = n.file !== undefined && unreadable.has(n.file);
+        // A planned (ghost) part has no health or findings: it is announced as missing.
         const ariaBefore = [
           n.label,
           NODE_TYPE_TEXT[n.type].name[lang],
-          health < 10 ? t(lang, 'health', { score: health }).toLowerCase() : '',
-          count > 0 ? `${count} ${t(lang, 'findings').toLowerCase()}` : '',
+          n.planned ? t(lang, 'missing') : '',
+          !n.planned && health < 10 ? t(lang, 'health', { score: health }).toLowerCase() : '',
+          !n.planned && count > 0 ? `${count} ${t(lang, 'findings').toLowerCase()}` : '',
         ]
           .filter(Boolean)
           .join(', ');
@@ -165,6 +167,7 @@ function MapViewInner({ graph, state, slots, selectedId, onSelect, showAllEdges,
               unreadable: isUnreadable,
               lockedText: t(lang, 'locked'),
               unreadableText: t(lang, 'unreadableShort'),
+              missingText: t(lang, 'missing'),
               onSelect,
               onFocusPart,
             },
@@ -197,13 +200,13 @@ function MapViewInner({ graph, state, slots, selectedId, onSelect, showAllEdges,
       const id = part.node.id;
       const f = flags[id];
       const selected = id === selectedId;
-      const key = `${f.pulsing ? 1 : 0}${f.touched ? 1 : 0}${f.locked ? 1 : 0}${selected ? 1 : 0}`;
+      const key = `${f.pulsing ? 1 : 0}${f.touched ? 1 : 0}${f.locked ? 1 : 0}${f.ghost ? 1 : 0}${selected ? 1 : 0}`;
       const hit = reuse.get(id);
       if (hit && hit.key === key) return hit.node;
       const ariaLabel = [part.ariaBefore, f.locked ? t(lang, 'locked') : '', part.ariaAfter].filter(Boolean).join(', ');
       const node: Node = {
         ...part.node,
-        data: { ...part.data, pulsing: f.pulsing, touched: f.touched, locked: f.locked, selected, ariaLabel } satisfies PartData,
+        data: { ...part.data, pulsing: f.pulsing, touched: f.touched, locked: f.locked, ghost: f.ghost, selected, ariaLabel } satisfies PartData,
       };
       reuse.set(id, { key, node });
       return node;

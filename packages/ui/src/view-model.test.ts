@@ -26,11 +26,18 @@ describe('view model', () => {
     expect(projectHealth({ ...g, nodes: [] })).toBe(10);
   });
 
+  it('marks planned parts as ghosts with no other flags', () => {
+    const withGhost = { ...g, nodes: [...g.nodes, { id: 'ghost:checkout', type: 'api-route' as const, zone: 'server' as const, label: 'Checkout', planned: true }] };
+    const flags = partFlags(withGhost, { pulseUntil: {}, touchedThisTurn: [], lockedFiles: [] }, 0);
+    expect(flags['ghost:checkout']).toMatchObject({ ghost: true, pulsing: false, touched: false, locked: false });
+    expect(flags['page:app/page.tsx'].ghost).toBe(false);
+  });
+
   it('flags pulsing, touched and locked parts by file', () => {
     const flags = partFlags(g, { pulseUntil: { 'lib/date.ts': 5000 }, touchedThisTurn: ['app/page.tsx'], lockedFiles: ['lib/date.ts'] }, 4000);
-    expect(flags['helper:lib/date.ts#formatDate']).toEqual({ pulsing: true, touched: false, locked: true, unreadable: false });
-    expect(flags['page:app/page.tsx']).toEqual({ pulsing: false, touched: true, locked: false, unreadable: false });
-    expect(flags['table:orders']).toEqual({ pulsing: false, touched: false, locked: false, unreadable: false });
+    expect(flags['helper:lib/date.ts#formatDate']).toEqual({ pulsing: true, touched: false, locked: true, unreadable: false, ghost: false });
+    expect(flags['page:app/page.tsx']).toEqual({ pulsing: false, touched: true, locked: false, unreadable: false, ghost: false });
+    expect(flags['table:orders']).toEqual({ pulsing: false, touched: false, locked: false, unreadable: false, ghost: false });
     expect(nextPulseEnd({ a: 5000, b: 3000 }, 4000)).toBe(5000);
     expect(nextPulseEnd({ a: 3000 }, 4000)).toBeNull();
   });

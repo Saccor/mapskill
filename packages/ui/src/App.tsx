@@ -1,13 +1,15 @@
 import type { Zone } from '@mapskill/core/client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { takeToken } from './api';
 import { ActivityBar } from './components/ActivityBar';
+import { GhostPanel } from './components/GhostPanel';
 import { GoalPanel } from './components/GoalPanel';
 import { Header } from './components/Header';
 import { MapView } from './components/MapView';
 import { SidePanel } from './components/SidePanel';
 import { useMapConnection } from './connection';
 import { errorText } from './errors';
+import { ghostItem, withGhosts } from './goals';
 import { pickLang, STRINGS, type Lang } from './i18n';
 import { useSlots } from './slots';
 import { isTextEntry } from './view-model';
@@ -28,8 +30,10 @@ function savedLang(): string | null {
 
 function MapApp({ token }: { token: string }) {
   const { state, dispatch, api, stale } = useMapConnection(token);
-  const slots = useSlots(state.graph, api, state.status);
   const [lang, setLang] = useState<Lang>(() => pickLang(navigator.language, savedLang()));
+  // The map shows the real parts plus the goal's missing items as ghosts; ghosts get slots like any part.
+  const shown = useMemo(() => (state.graph ? withGhosts(state.graph, state.goal, lang) : null), [state.graph, state.goal, lang]);
+  const slots = useSlots(shown, api, state.status);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAllEdges, setShowAllEdges] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<Zone>>(() => new Set<Zone>(['tests']));
@@ -55,7 +59,7 @@ function MapApp({ token }: { token: string }) {
     return () => clearTimeout(timer);
   }, [error]);
 
-  const hasNode = !!(state.graph && selectedId && state.graph.nodes.some((n) => n.id === selectedId));
+  const hasNode = !!(shown && selectedId && shown.nodes.some((n) => n.id === selectedId));
   useEffect(() => {
     if (!hasNode) return;
     const onKey = (e: KeyboardEvent): void => {
@@ -70,8 +74,8 @@ function MapApp({ token }: { token: string }) {
   const lastSelected = useRef<string | null>(null);
   // The selected part vanished from the map (file deleted, project rescanned): nothing is selected any more.
   useEffect(() => {
-    if (state.graph && selectedId && !hasNode) setSelectedId(null);
-  }, [state.graph, selectedId, hasNode]);
+    if (shown && selectedId && !hasNode) setSelectedId(null);
+  }, [shown, selectedId, hasNode]);
   useEffect(() => {
     if (selectedId) {
       lastSelected.current = selectedId;
@@ -116,7 +120,8 @@ function MapApp({ token }: { token: string }) {
   };
 
   const graph = state.graph;
-  const node = graph && selectedId ? graph.nodes.find((n) => n.id === selectedId) ?? null : null;
+  const node = shown && selectedId ? shown.nodes.find((n) => n.id === selectedId) ?? null : null;
+  const ghost = node?.planned && selectedId ? ghostItem(state.goal, selectedId) : null;
 
   return (
     <div className="app">
@@ -143,15 +148,19 @@ function MapApp({ token }: { token: string }) {
       {state.goal && goalOpen && <GoalPanel goal={state.goal} lang={lang} onSelect={select} onClose={() => setGoalOpen(false)} />}
       <div className={`main${node ? '' : ' no-panel'}`}>
         <div className="map">
-          {graph && slots ? (
-            <MapView graph={graph} state={state} slots={slots} selectedId={selectedId} onSelect={select} showAllEdges={showAllEdges} collapsed={collapsed} onToggleZone={toggleZone} lang={lang} />
+          {shown && slots ? (
+            <MapView graph={shown} state={state} slots={slots} selectedId={selectedId} onSelect={select} showAllEdges={showAllEdges} collapsed={collapsed} onToggleZone={toggleZone} lang={lang} />
           ) : (
             <p className="muted center">{STRINGS[lang].connecting}</p>
           )}
         </div>
         {graph && node && (
           <div className="panel-wrap">
-            <SidePanel key={node.id} graph={graph} node={node} locked={!!node.file && state.lockedFiles.includes(node.file)} lang={lang} api={api} onSelect={select} onError={showError} onDone={announce} />
+            {ghost ? (
+              <GhostPanel key={node.id} graph={graph} item={ghost} nodeId={node.id} lang={lang} api={api} onSelect={select} onError={showError} onDone={announce} />
+            ) : (
+              <SidePanel key={node.id} graph={graph} node={node} locked={!!node.file && state.lockedFiles.includes(node.file)} lang={lang} api={api} onSelect={select} onError={showError} onDone={announce} />
+            )}
           </div>
         )}
       </div>

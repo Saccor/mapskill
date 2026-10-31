@@ -1,0 +1,60 @@
+@import '@xyflow/react/dist/style.css';
+
+:root {
+  color-scheme: light dark;
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --text: #1d1d1b;
+  --muted: #5f5f5a;
+  --border: #d9d9d4;
+  --zone: #eeeeea;
+  --accent: #2f6fdb;
+  --warn: #a15c00;
+  --pulse: rgba(47, 111, 219, 0.45);
+  --focus: #2f6fdb;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615;
+    --panel: #1f1f1e;
+    --text: #ececea;
+    --muted: #a7a7a1;
+    --border: #3a3a37;
+    --zone: #242422;
+    --accent: #7aa7ff;
+    --warn: #f0b35a;
+    --pulse: rgba(122, 167, 255, 0.5);
+    --focus: #7aa7ff;
+  }
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(--text); }
+.app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+.main { display: grid; grid-template-columns: 1fr minmax(320px, 400px); min-height: 0; }
+.main.no-panel { grid-template-columns: 1fr; }
+.map { min-height: 0; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.zone { width: 100%; height: 100%; background: var(--zone); border: 1px solid var(--border); border-radius: 10px; }
+.zone-header { all: unset; display: flex; gap: 8px; align-items: baseline; padding: 8px 16px; cursor: pointer; font-weight: 600; }
+.zone-header:focus-visible { outline: 3px solid var(--focus); border-radius: 8px; }
+.zone-count { font-weight: 400; color: var(--muted); font-size: 0.85em; }
+
+.part {
+  width: 200px; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; text-align: left;
+}
+.part .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.part .badge { font-size: 0.8em; color: var(--muted); }
+.part .warn { font-size: 0.8em; color: var(--warn); font-weight: 600; }
+.part .lock { font-size: 0.75em; color: var(--muted); }
+.part.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.part.touched { border-color: var(--accent); }
+.part.pulsing { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--pulse); } 50% { box-shadow: 0 0 0 8px var(--pulse); } }
+@media (prefers-reduced-motion: reduce) {
+  .part.pulsing { animation: none; outline: 3px dashed var(--accent); outline-offset: 1px; }
+}
+.part-handle { opacity: 0; pointer-events: none; }

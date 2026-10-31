@@ -107,3 +107,16 @@ describe('plugin bundle with the map view', () => {
     expect(await page.text()).toContain('Fake map');
   }, 60_000);
 });
+
+describe('plugin bundle without the map view', () => {
+  it('skips the map view when uiDir is null', async () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-bundle-noui-'));
+    try {
+      const r = await bundlePlugin(out, { uiDir: null });
+      expect(r.ui).toBe(false);
+      expect(fs.existsSync(path.join(out, 'ui'))).toBe(false);
+    } finally {
+      fs.rmSync(out, { recursive: true, force: true });
+    }
+  }, 120_000);
+});

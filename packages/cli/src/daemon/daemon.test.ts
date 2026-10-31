@@ -315,6 +315,14 @@ describe('startDaemon', () => {
     await expect(request(h.info, 'GET', `/api/source?file=${encodeURIComponent('../outside.ts')}`)).rejects.toMatchObject({ status: 404 });
   });
 
+  it('refuses prototype names and .env* files as source', async () => {
+    const root = tmpProject({ ...files(), constructor: 'x\n', toString: 'y\n', '.env.local.ts': 'export const k = 1;\n' });
+    const h = await start(root, { watch: false });
+    for (const f of ['constructor', 'toString', '__proto__', '.env.local.ts']) {
+      await expect(request(h.info, 'GET', `/api/source?file=${encodeURIComponent(f)}`)).rejects.toMatchObject({ status: 404 });
+    }
+  });
+
   it('pushes a turn message when a turn starts', async () => {
     const root = tmpProject(files());
     const h = await start(root, { watch: false });

@@ -294,10 +294,15 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       const visible = new Set(project.graph.findings.map((f) => f.id));
       const kept = Object.fromEntries(Object.entries(project.dismissed).filter(([id]) => !visible.has(id)));
       project.dismissed = kept;
-      writeDismissed(root, kept);
+      // Broadcast first: the graph already changed, so clients must not miss the delta if the write fails.
       if (!result.empty) {
         seq += 1;
         server.broadcast({ type: 'delta', seq, delta: result.delta });
+      }
+      try {
+        writeDismissed(root, kept);
+      } catch (err) {
+        log(`dismissed.json write failed: ${String(err)}`);
       }
     },
     layout: async () => readLayout(root),
@@ -305,7 +310,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     source: async (file, start = 1, end): Promise<SourceAnswer | null> => {
       await loaded;
       const rel = toProjectRel(root, file);
-      if (rel === null || !(rel in project!.facts)) return null;
+      if (rel === null || !Object.hasOwn(project!.facts, rel) || /^\.env/.test(rel.split('/').pop()!)) return null;
       let text: string;
       try {
         text = fs.readFileSync(path.join(root, rel), 'utf8');

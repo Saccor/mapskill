@@ -48,6 +48,15 @@ describe('reduce', () => {
     expect(s.requests).toEqual([]);
   });
 
+  it('applies a delta and the goal it carries in one step', () => {
+    const live = { goalId: 'g', title: { en: 'G', sv: 'G' }, items: [], done: 1, total: 2 };
+    const s0 = reduce(initialState, { type: 'server', now: 0, message: { type: 'graph', seq: 3, graph: graph(['a']) } });
+    const s1 = reduce(s0, { type: 'server', now: 0, message: { type: 'delta', seq: 4, delta: { ...emptyDelta, addedNodes: [{ id: 'b', type: 'helper', zone: 'shared', label: 'b' }] }, goal: live } });
+    expect(s1.graph!.nodes.map((n) => n.id)).toContain('b');
+    expect(s1.goal).toEqual(live);
+    const s2 = reduce(s1, { type: 'server', now: 0, message: { type: 'delta', seq: 5, delta: emptyDelta } });
+    expect(s2.goal).toEqual(live);
+  });
   it('keeps the goal list and the live goal status', () => {
     const answer = { goals: [{ id: 'g', title: { en: 'G', sv: 'G' }, description: { en: '', sv: '' } }], status: null };
     let s = reduce(initialState, { type: 'goal', answer });

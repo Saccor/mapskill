@@ -94,7 +94,8 @@ export interface SourceAnswer {
 /** Messages the daemon sends over WebSocket. */
 export type ServerMessage =
   | { type: 'graph'; seq: number; graph: PublicGraph }
-  | { type: 'delta'; seq: number; delta: GraphDelta }
+  /** `goal` rides with the delta when the goal status changed with it, so clients apply both in one step. */
+  | { type: 'delta'; seq: number; delta: GraphDelta; goal?: GoalStatus | null }
   | { type: 'activity'; at: number; files: ActivityFile[] }
   | { type: 'turn'; at: number; sessionId: string }
   | { type: 'requests'; requests: MapRequest[] }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { assignSlots } from './layout';
-import { computeSlots, layoutPhase, mergeForSave, restorableSlots, shouldSave, SlotSession, withTimeout } from './slots';
+import type { GoalStatus } from '@mapskill/core/client';
+import { computeSlots, inheritGhostSlots, layoutPhase, mergeForSave, restorableSlots, shouldSave, SlotSession, withTimeout } from './slots';
 
 describe('mergeForSave', () => {
   it('keeps slots of parts that are gone and lets current ones win', () => {
@@ -92,5 +93,25 @@ describe('computeSlots', () => {
   });
   it('uses the saved slot of a part, with no provisional id-order slots', () => {
     expect(computeSlots([node('w'), node('y')], { y: 5 }, {}, {})).toEqual({ y: 5, w: 0 });
+  });
+});
+
+describe('inheritGhostSlots', () => {
+  const goal = (done: boolean, zone: 'pages' | 'blocks' = 'pages'): GoalStatus => ({
+    goalId: 'g', title: { en: 'G', sv: 'G' }, done: done ? 1 : 0, total: 1,
+    items: [{ id: 'pricing-page', title: { en: 'P', sv: 'P' }, why: { en: '', sv: '' }, done, zone, nodeType: 'page', matchedNodeIds: done ? ['page:app/pricing/page.tsx'] : [] }],
+  });
+  const page = { id: 'page:app/pricing/page.tsx', zone: 'pages' as const };
+  it('gives the real part the slot of its ghost', () => {
+    expect(inheritGhostSlots([page], { 'ghost:pricing-page': 5 }, goal(true))).toEqual({ [page.id]: 5 });
+    const slots = computeSlots([page, { id: 'page:app/a.tsx', zone: 'pages' }], {}, {}, { 'ghost:pricing-page': 5, 'page:app/a.tsx': 0 }, goal(true));
+    expect(slots[page.id]).toBe(5);
+  });
+  it('does nothing when another part holds the slot, the zone differs, or the item is not done', () => {
+    expect(inheritGhostSlots([page, { id: 'page:other', zone: 'pages' }], { 'ghost:pricing-page': 5, 'page:other': 5 }, goal(true))).toEqual({});
+    expect(inheritGhostSlots([page], { 'ghost:pricing-page': 5 }, goal(true, 'blocks'))).toEqual({});
+    expect(inheritGhostSlots([page], { 'ghost:pricing-page': 5 }, goal(false))).toEqual({});
+    expect(inheritGhostSlots([page], { 'ghost:pricing-page': 5, [page.id]: 2 }, goal(true))).toEqual({});
+    expect(inheritGhostSlots([page], { 'ghost:pricing-page': 5 }, null)).toEqual({});
   });
 });

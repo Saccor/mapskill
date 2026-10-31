@@ -473,7 +473,9 @@ describe('goals', () => {
     write(root, 'app/pricing/page.tsx', 'export default function Pricing() {\n  return <main>Prices</main>;\n}\n');
     await request(h.info, 'POST', '/api/touched', { files: [path.join(root, 'app/pricing/page.tsx')] });
     await request(h.info, 'GET', '/api/graph'); // flushes the queue
-    await waitFor(() => client.messages.some((m) => m.type === 'goal' && m.status?.items.find((i) => i.id === 'pricing-page')?.done === true));
+    // The change comes with the graph delta that caused it, not as a separate message.
+    await waitFor(() => client.messages.some((m) => m.type === 'delta' && m.goal?.items.find((i) => i.id === 'pricing-page')?.done === true));
+    expect(client.messages.some((m) => m.type === 'goal' && m.status?.items.find((i) => i.id === 'pricing-page')?.done === true)).toBe(false);
 
     await expect(request(h.info, 'POST', '/api/goal', { goalId: 'nope' })).rejects.toMatchObject({ status: 404 });
     await expect(request(h.info, 'POST', '/api/goal', { goalId: 3 })).rejects.toMatchObject({ status: 400 });

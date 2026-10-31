@@ -33,7 +33,7 @@ function MapApp({ token }: { token: string }) {
   const [lang, setLang] = useState<Lang>(() => pickLang(navigator.language, savedLang()));
   // The map shows the real parts plus the goal's missing items as ghosts; ghosts get slots like any part.
   const shown = useMemo(() => (state.graph ? withGhosts(state.graph, state.goal, lang) : null), [state.graph, state.goal, lang]);
-  const slots = useSlots(shown, api, state.status);
+  const slots = useSlots(shown, api, state.status, state.goal);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAllEdges, setShowAllEdges] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<Zone>>(() => new Set<Zone>(['tests']));

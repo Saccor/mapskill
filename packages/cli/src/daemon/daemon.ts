@@ -130,10 +130,14 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       changedSinceReconcile = true;
       // A new .gitignore changes which folders the watcher must skip.
       if (result.reloaded && batch.paths.includes('.gitignore')) restartWatcher();
+      // The goal status is computed before the delta goes out, so a change caused by it travels in the same message.
+      const goalChange = recomputeGoal();
       if (!result.empty) {
         seq += 1;
-        server.broadcast({ type: 'delta', seq, delta: result.delta });
+        server.broadcast(goalChange ? { type: 'delta', seq, delta: result.delta, goal: goalChange.status } : { type: 'delta', seq, delta: result.delta });
         scheduleCacheSave();
+      } else if (goalChange) {
+        server.broadcast({ type: 'goal', status: goalChange.status });
       }
       const relevant = batch.paths.filter((p) => known.has(p) || p in current.facts || current.skipped.has(p));
       const at = Date.now();
@@ -166,9 +170,9 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       return null;
     }
   };
-  /** Recomputes the goal status; pushes it when it changed. */
-  const refreshGoal = (): void => {
-    if (!project || !serverReady) return;
+  /** Recomputes the goal status and stores it. Returns the new status when it changed, otherwise null. Does not broadcast. */
+  const recomputeGoal = (): { status: GoalStatus | null } | null => {
+    if (!project || !serverReady) return null;
     let next: GoalStatus | null = null;
     try {
       const template = goalId ? safeFindGoal(goalId) : null;
@@ -176,9 +180,14 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     } catch (err) {
       log(`goal evaluation failed: ${String(err)}`);
     }
-    if (JSON.stringify(next) === JSON.stringify(goalStatus)) return;
+    if (JSON.stringify(next) === JSON.stringify(goalStatus)) return null;
     goalStatus = next;
-    server.broadcast({ type: 'goal', status: goalStatus });
+    return { status: goalStatus };
+  };
+  /** Recomputes the goal status; pushes it on its own when it changed. */
+  const refreshGoal = (): void => {
+    const change = recomputeGoal();
+    if (change) server.broadcast({ type: 'goal', status: change.status });
   };
   const queue = new ChangeQueue(onFlush, options.debounceMs ?? 200);
 

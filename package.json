@@ -2,15 +2,19 @@
   "name": "mapskill-workspace",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "scan": "tsx packages/cli/src/bin.ts scan",
-    "mapskill": "tsx packages/cli/src/bin.ts"
+    "mapskill": "tsx packages/cli/src/bin.ts",
+    "build:plugin": "tsx packages/cli/src/build/bundle.ts plugin/dist"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "esbuild": "^0.28.2",
     "tsx": "^4.20.0",
     "typescript": "~5.9.3",
     "vitest": "^3.2.4"

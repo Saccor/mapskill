@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { runDaemonCommand, runStatus, runStop } from './commands';
-import { runHook } from './hooks/run';
-import { runMcp } from './mcp/server';
-import { runLock, runLocks, runUnlock } from './lock-commands';
-import { runScan } from './scan';
+import { fileURLToPath } from 'node:url';
+import { setSelfEntry } from './daemon/client';
+
+// Each command is imported on demand: hooks must not load @mapskill/core (and with it the TypeScript compiler).
+setSelfEntry(fileURLToPath(import.meta.url));
 
 const USAGE = [
   'Usage:',
@@ -32,16 +32,17 @@ function exitAfterFlush(code: number): void {
 
 const [command, ...rest] = process.argv.slice(2);
 const dir = rest[0] ?? '.';
-const commands: Record<string, () => number | Promise<number>> = {
-  scan: () => runScan(rest),
-  status: () => runStatus(dir),
-  stop: () => runStop(dir),
-  daemon: () => runDaemonCommand(dir),
-  lock: () => runLock(rest),
-  unlock: () => runUnlock(rest),
-  locks: () => runLocks(rest),
-  mcp: () => runMcp(),
+const commands: Record<string, () => Promise<number>> = {
+  scan: async () => (await import('./scan')).runScan(rest),
+  status: async () => (await import('./commands')).runStatus(dir),
+  stop: async () => (await import('./commands')).runStop(dir),
+  daemon: async () => (await import('./commands')).runDaemonCommand(dir),
+  lock: async () => (await import('./lock-commands')).runLock(rest),
+  unlock: async () => (await import('./lock-commands')).runUnlock(rest),
+  locks: async () => (await import('./lock-commands')).runLocks(rest),
+  mcp: async () => (await import('./mcp/server')).runMcp(),
   hook: async () => {
+    const { runHook } = await import('./hooks/run');
     const result = await runHook(rest[0] ?? '', { stdin: process.stdin, env: process.env });
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);

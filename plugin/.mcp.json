@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "mapskill": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/mapskill.mjs", "mcp"] }
+  }
+}

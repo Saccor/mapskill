@@ -1,6 +1,6 @@
-import { Background, Controls, ReactFlow, type AriaLabelConfig, type Edge, type Node } from '@xyflow/react';
+import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow, useStoreApi, type AriaLabelConfig, type Edge, type Node } from '@xyflow/react';
 import { ZONE_LABELS, type EdgeKind, type PublicGraph, type Zone } from '@mapskill/core/client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NODE_TYPE_TEXT, t, type Lang } from '../i18n';
 import { layoutMap } from '../layout';
 import type { MapState } from '../reducer';
@@ -63,7 +63,36 @@ interface Skeleton {
   shown: Set<string>;
 }
 
-export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdges, collapsed, onToggleZone, lang }: MapViewProps) {
+export function MapView(props: MapViewProps) {
+  return (
+    <ReactFlowProvider>
+      <MapViewInner {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function MapViewInner({ graph, state, slots, selectedId, onSelect, showAllEdges, collapsed, onToggleZone, lang }: MapViewProps) {
+  const flow = useReactFlow();
+  const store = useStoreApi();
+  // Keyboard focus on a part that is outside the view pans the map to it; a part already in view causes no movement.
+  const onFocusPart = useCallback(
+    (id: string) => {
+      const node = flow.getInternalNode(id);
+      if (!node) return;
+      const { width: vw, height: vh } = store.getState();
+      const { x: tx, y: ty, zoom } = flow.getViewport();
+      const { x, y } = node.internals.positionAbsolute;
+      const w = node.measured.width ?? 0;
+      const h = node.measured.height ?? 0;
+      const left = x * zoom + tx;
+      const top = y * zoom + ty;
+      if (left >= 0 && top >= 0 && left + w * zoom <= vw && top + h * zoom <= vh) return;
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      void flow.setCenter(x + w / 2, y + h / 2, { zoom, duration: reduced ? 0 : 200 });
+    },
+    [flow, store],
+  );
+
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const end = nextPulseEnd(state.pulseUntil, now);
@@ -131,6 +160,7 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
               lockedText: t(lang, 'locked'),
               unreadableText: t(lang, 'unreadableShort'),
               onSelect,
+              onFocusPart,
             },
             node: {
               id: n.id,
@@ -146,7 +176,7 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
       }
     }
     return { items, shown };
-  }, [graph, slots, collapsed, lang, onSelect, onToggleZone]);
+  }, [graph, slots, collapsed, lang, onSelect, onToggleZone, onFocusPart]);
 
   // The cheap part: pulse, touched, lock and selection flags. A part whose flags did not change keeps its node object,
   // so React (and React Flow) skip it.

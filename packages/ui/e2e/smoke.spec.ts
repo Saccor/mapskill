@@ -7,6 +7,7 @@ const root = (): string => process.env.MAPSKILL_E2E_ROOT!;
 const token = (): string => new URL(url()).searchParams.get('t')!;
 const api = async <T>(p: string): Promise<T> => {
   const res = await fetch(new URL(p, url()), { headers: { 'x-mapskill-token': token() } });
+  if (!res.ok) throw new Error(`${p} answered ${res.status}`);
   return (await res.json()) as T;
 };
 type Graph = { nodes: { id: string; label: string; file?: string; zone: string }[] };
@@ -50,11 +51,13 @@ test('keyboard: Tab to a part, Enter opens the panel, Escape closes it', async (
     if (await page.evaluate(() => document.activeElement?.hasAttribute('data-node-id'))) break;
   }
   expect(await page.evaluate(() => document.activeElement?.hasAttribute('data-node-id'))).toBe(true);
+  const partId = (await page.evaluate(() => document.activeElement?.getAttribute('data-node-id')))!;
   await page.keyboard.press('Enter');
   await expect(page.locator('aside.panel')).toBeVisible();
-  await page.locator('aside.panel button').first().focus();
+  // No manual focus: Escape right after Enter must close the panel and give focus back to the part.
   await page.keyboard.press('Escape');
   await expect(page.locator('aside.panel')).toHaveCount(0);
+  await expect(page.locator(`[data-node-id="${partId}"]`)).toBeFocused();
 });
 
 test('a file change pulses the part and moves nothing', async ({ page }) => {
@@ -78,5 +81,25 @@ test('existing parts keep their slots when a part is added', async ({ page }) =>
   const addedId = (await added.getAttribute('data-node-id'))!;
   await expect.poll(async () => (await api<{ slots: Record<string, number> }>('/api/layout')).slots[addedId], { timeout: 10_000 }).not.toBeUndefined();
   const after = (await api<{ slots: Record<string, number> }>('/api/layout')).slots;
-  for (const [id, slot] of Object.entries(before)) if (id in after) expect(after[id]).toBe(slot);
+  for (const [id, slot] of Object.entries(before)) {
+    expect(id in after, `${id} is still saved`).toBe(true);
+    expect(after[id]).toBe(slot);
+  }
+});
+
+test('opening a part shows highlighted code and the page raises no CSP violations', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __csp: string[] }).__csp = [];
+    document.addEventListener('securitypolicyviolation', (e) => (window as unknown as { __csp: string[] }).__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
+  });
+  const consoleErrors: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' && /content security policy/i.test(m.text())) consoleErrors.push(m.text());
+  });
+  const graph = await open(page);
+  const withCode = graph.nodes.find((n) => n.file && n.zone !== 'tests')!;
+  await page.locator(`[data-node-id="${withCode.id}"]`).click();
+  await expect(page.locator('aside.panel .code .shiki')).toBeVisible({ timeout: 10_000 });
+  expect(await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp)).toEqual([]);
+  expect(consoleErrors).toEqual([]);
 });

@@ -1,3 +1,5 @@
 node_modules/
 dist/
 .mapskill/
+test-results/
+playwright-report/

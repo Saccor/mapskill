@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { tmpProject } from '@mapskill/core/test-helpers';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { addLocks } from '../locks';
 import { canonicalRoot } from '../project-path';
 import { bundlePlugin, type BundleReport } from './bundle';
@@ -16,6 +16,14 @@ beforeAll(async () => {
   outdir = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-bundle-'));
   report = await bundlePlugin(outdir);
 }, 120_000);
+
+afterAll(() => {
+  try {
+    fs.rmSync(outdir, { recursive: true, force: true });
+  } catch {
+    // best effort
+  }
+});
 
 const run = (args: string[], input?: unknown, env: NodeJS.ProcessEnv = {}) =>
   spawnSync(process.execPath, [report.entry, ...args], {

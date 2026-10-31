@@ -128,9 +128,12 @@ describe('version check', () => {
 
 describe('selfCommand', () => {
   it('uses the registered entry file', () => {
-    setSelfEntry(path.join(os.tmpdir(), 'bundle', 'mapskill.mjs'));
-    expect(selfCommand()).toEqual({ command: process.execPath, args: [path.join(os.tmpdir(), 'bundle', 'mapskill.mjs')] });
-    setSelfEntry(undefined);
+    try {
+      setSelfEntry(path.join(os.tmpdir(), 'bundle', 'mapskill.mjs'));
+      expect(selfCommand()).toEqual({ command: process.execPath, args: [path.join(os.tmpdir(), 'bundle', 'mapskill.mjs')] });
+    } finally {
+      setSelfEntry(undefined);
+    }
     expect(selfCommand().args.at(-1)).toMatch(/bin\.ts$/);
   });
 });

@@ -13,16 +13,27 @@ import { bundlePlugin, type BundleReport } from './bundle';
 
 let report: BundleReport;
 let root: string;
+const temps: string[] = [];
 
 beforeAll(async () => {
-  report = await bundlePlugin(fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-e2e-bundle-')));
+  const bundleDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-e2e-bundle-'));
+  temps.push(bundleDir);
+  report = await bundlePlugin(bundleDir);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-e2e-'));
+  temps.push(dir);
   fs.cpSync(fixture('messy-app'), dir, { recursive: true, filter: (src) => !src.split(path.sep).includes('.mapskill') });
   root = canonicalRoot(dir);
 }, 120_000);
 
 afterAll(async () => {
   if (root) await runStop(root, () => {});
+  for (const dir of temps) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // best effort
+    }
+  }
 });
 
 function hook(event: string, input: Record<string, unknown>) {

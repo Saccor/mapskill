@@ -81,7 +81,7 @@ export function findSimilar(
         if (byName > score) [score, reason] = [byName, 'similar-name'];
       }
       if (score < MIN_SCORE) continue;
-      const nodeId = (nodes.find((n) => n.file === f.path && n.id.endsWith(`#${fn.name}`)) ?? nodes.find((n) => n.file === f.path))?.id;
+      const nodeId = nodes.find((n) => n.file === f.path && n.id.endsWith(`#${fn.name}`))?.id;
       out.push({
         name: fn.name,
         file: f.path,

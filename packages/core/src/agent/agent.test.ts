@@ -41,6 +41,19 @@ describe('findSimilar', () => {
     expect(hits.map((h) => h.name).sort()).toEqual(['formatDate', 'formatDateCopy', 'formatDay']);
   });
 
+  it('gives a match a nodeId only from a node of that same function', () => {
+    const own = messy.nodes.find((n) => n.id.includes('#') && n.file !== undefined && messy.files[n.file]);
+    expect(own).toBeDefined();
+    const file = messy.files[own!.file!]!;
+    const fn = file.functions.find((f) => own!.id.endsWith(`#${f.name}`))!;
+    const other = { ...own!, id: `other:${file.path}#somethingElse` };
+    // Another node in the same file exists, but none for this function: the match must not borrow it.
+    const hit = findSimilar({ [file.path]: file }, [other], { name: fn.name }).find((h) => h.name === fn.name);
+    expect(hit).toBeDefined();
+    expect(hit!.nodeId).toBeUndefined();
+    expect(findSimilar({ [file.path]: file }, [own!], { name: fn.name }).find((h) => h.name === fn.name)!.nodeId).toBe(own!.id);
+  });
+
   it('accepts a bare code block and drops weak matches', () => {
     expect(findSimilar(messy.files, messy.nodes, { code: 'return 1;' })).toEqual([]);
     expect(findSimilar(messy.files, messy.nodes, { name: 'zzz' })).toEqual([]);

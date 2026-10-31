@@ -249,6 +249,80 @@ describe('startDaemon', () => {
     expect(abs.text).toContain('sumA');
     await expect(request(h.info, 'GET', `/api/node?path=${encodeURIComponent(path.join(root, '..', 'x.ts'))}`)).rejects.toThrow(/404|no such node/);
   });
+
+  it('locks a part from the map and reports the locked files', async () => {
+    const root = tmpProject(files());
+    const h = await start(root, { watch: false });
+    const client = await connect(h.info);
+    type Locks = { locks: { path: string; label?: string }[]; lockedFiles: string[] };
+    const graph = await request<PublicGraph>(h.info, 'GET', '/api/graph');
+    const node = graph.nodes.find((n) => n.file === 'lib/a.ts')!;
+    const locked = await request<Locks>(h.info, 'POST', '/api/locks', { nodeId: node.id, locked: true });
+    expect(locked.lockedFiles).toEqual(['lib/a.ts']);
+    expect(locked.locks[0]).toMatchObject({ path: 'lib/a.ts', label: node.label });
+    await waitFor(() => client.messages.some((m) => m.type === 'locks'));
+    const unlocked = await request<Locks>(h.info, 'POST', '/api/locks', { nodeId: node.id, locked: false });
+    expect(unlocked.lockedFiles).toEqual([]);
+    const table = graph.nodes.find((n) => !n.file);
+    if (table) await expect(request(h.info, 'POST', '/api/locks', { nodeId: table.id, locked: true })).rejects.toMatchObject({ status: 400 });
+    await expect(request(h.info, 'POST', '/api/locks', { nodeId: 'nope', locked: true })).rejects.toMatchObject({ status: 404 });
+    client.close();
+  });
+
+  it('queues map requests, pushes them and hands them out once', async () => {
+    const root = tmpProject(files());
+    const h = await start(root, { watch: false });
+    const client = await connect(h.info);
+    const { request: r } = await request<{ request: { id: string } }>(h.info, 'POST', '/api/requests', { kind: 'explain', text: 'Explain sumA' });
+    await waitFor(() => client.messages.some((m) => m.type === 'requests' && m.requests.length === 1));
+    const claimed = await request<{ requests: { id: string }[] }>(h.info, 'POST', '/api/requests/claim', { sessionId: 's1' });
+    expect(claimed.requests.map((x) => x.id)).toEqual([r.id]);
+    expect((await request<{ requests: unknown[] }>(h.info, 'POST', '/api/requests/claim', {})).requests).toEqual([]);
+    expect(fs.existsSync(path.join(root, '.mapskill', 'requests.json'))).toBe(true);
+    client.close();
+  });
+
+  it('dismisses a finding, pushes a delta and remembers it across restarts', async () => {
+    const root = tmpProject({ ...files(), 'lib/b.ts': fn('sumB') });
+    const h = await start(root, { watch: false });
+    const client = await connect(h.info);
+    const graph = await request<PublicGraph>(h.info, 'GET', '/api/graph');
+    const dup = graph.findings.find((f) => f.kind.endsWith('-duplicate'))!;
+    await request(h.info, 'POST', '/api/dismiss', { findingId: dup.id });
+    await waitFor(() => client.messages.some((m) => m.type === 'delta' && m.delta.resolvedFindingIds.includes(dup.id)));
+    await expect(request(h.info, 'POST', '/api/dismiss', { findingId: dup.id })).rejects.toMatchObject({ status: 404 });
+    client.close();
+    await h.stop('restart');
+    const h2 = await start(root, { watch: false });
+    const again = await request<PublicGraph>(h2.info, 'GET', '/api/graph');
+    expect(again.findings.some((f) => f.id === dup.id)).toBe(false);
+  });
+
+  it('saves the layout and serves source lines of project files only', async () => {
+    const root = tmpProject({ ...files(), '.env': 'SECRET=1\n' });
+    const h = await start(root, { watch: false });
+    await request(h.info, 'POST', '/api/layout', { slots: { 'helper:lib/a.ts#sumA': 4 } });
+    expect(await request(h.info, 'GET', '/api/layout')).toEqual({ version: 1, slots: { 'helper:lib/a.ts#sumA': 4 } });
+    const src = await request<{ file: string; start: number; end: number; total: number; lines: string[] }>(
+      h.info, 'GET', '/api/source?file=lib/a.ts&start=2&end=3',
+    );
+    expect(src).toMatchObject({ file: 'lib/a.ts', start: 2, end: 3 });
+    expect(src.lines).toHaveLength(2);
+    expect(src.lines[0]).toContain('const total');
+    const abs = await request<{ file: string }>(h.info, 'GET', `/api/source?file=${encodeURIComponent(path.join(root, 'lib', 'a.ts'))}`);
+    expect(abs.file).toBe('lib/a.ts');
+    await expect(request(h.info, 'GET', '/api/source?file=.env')).rejects.toMatchObject({ status: 404 });
+    await expect(request(h.info, 'GET', `/api/source?file=${encodeURIComponent('../outside.ts')}`)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('pushes a turn message when a turn starts', async () => {
+    const root = tmpProject(files());
+    const h = await start(root, { watch: false });
+    const client = await connect(h.info);
+    await request(h.info, 'POST', '/api/turn', { sessionId: 's1' });
+    await waitFor(() => client.messages.some((m) => m.type === 'turn' && m.sessionId === 's1'));
+    client.close();
+  });
 });
 
 describe('daemon lifecycle', () => {

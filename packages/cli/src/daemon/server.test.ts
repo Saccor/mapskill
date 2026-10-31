@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { connect, waitFor } from '../test-utils';
 import { DaemonRequestError, request } from './client';
-import { startServer, type DaemonServer, type ServerDeps } from './server';
+import { HttpError, startServer, type DaemonServer, type ServerDeps } from './server';
 
 const TOKEN = 'secret-token';
 const emptyGraph: PublicGraph = {
@@ -13,7 +13,20 @@ const emptyGraph: PublicGraph = {
 };
 
 function fakeDeps(over: Partial<ServerDeps> = {}) {
-  const calls = { touched: [] as unknown[], findings: [] as unknown[], shutdown: 0, activity: 0, stop: [] as unknown[] };
+  const calls = {
+    touched: [] as unknown[],
+    findings: [] as unknown[],
+    shutdown: 0,
+    activity: 0,
+    stop: [] as unknown[],
+    setLock: [] as unknown[],
+    addRequest: [] as unknown[],
+    cancelRequest: [] as unknown[],
+    claimRequests: [] as unknown[],
+    dismiss: [] as unknown[],
+    saveLayout: [] as unknown[],
+    source: [] as unknown[],
+  };
   const deps: ServerDeps = {
     token: TOKEN,
     status: () => ({ ok: true, root: '/p', pid: process.pid, version: 'test', ready: true, fileCount: 0, clients: 0, seq: 0 }),
@@ -35,6 +48,35 @@ function fakeDeps(over: Partial<ServerDeps> = {}) {
     overview: async (maxNodes) => `overview ${maxNodes ?? 'default'}`,
     similar: async (q) => [{ name: q.name ?? 'x', file: 'lib/a.ts', startLine: 1, endLine: 2, score: 0.9, reason: 'similar-name' }],
     node: async (q) => (q.id === 'known' || q.path === 'lib/a.ts' ? 'details' : null),
+    locks: async () => ({ locks: [], lockedFiles: [] }),
+    setLock: async (nodeId, locked) => {
+      calls.setLock.push([nodeId, locked]);
+      return { locks: [], lockedFiles: [] };
+    },
+    requests: async () => [],
+    addRequest: async (input) => {
+      calls.addRequest.push(input);
+      return { id: 'r1', kind: input.kind, text: input.text, createdAt: 1, status: 'pending' };
+    },
+    cancelRequest: async (id) => {
+      calls.cancelRequest.push(id);
+      return [];
+    },
+    claimRequests: async (sessionId) => {
+      calls.claimRequests.push(sessionId);
+      return [];
+    },
+    dismiss: async (findingId) => {
+      calls.dismiss.push(findingId);
+    },
+    layout: async () => ({ version: 1, slots: {} }),
+    saveLayout: async (slots) => {
+      calls.saveLayout.push(slots);
+    },
+    source: async (file, start, end) => {
+      calls.source.push([file, start, end]);
+      return file === 'lib/a.ts' ? { file, start: start ?? 1, end: end ?? 40, total: 3, lines: ['a', 'b'] } : null;
+    },
     shutdown: () => {
       calls.shutdown++;
     },
@@ -242,5 +284,52 @@ describe('plugin routes', () => {
     expect(await request(info, 'GET', '/api/node?path=lib%2Fa.ts')).toEqual({ text: 'details' });
     await expect(request(info, 'GET', '/api/node?id=nope')).rejects.toMatchObject({ status: 404 });
     await expect(request(info, 'GET', '/api/node')).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe('map view routes', () => {
+  it('validates and forwards lock, request, dismiss, layout and source calls', async () => {
+    const { deps, calls } = fakeDeps();
+    server = await startServer(deps);
+    const info = { port: server.port, token: TOKEN };
+    await expect(request(info, 'POST', '/api/locks', { nodeId: 'x' })).rejects.toMatchObject({ status: 400 });
+    await request(info, 'POST', '/api/locks', { nodeId: 'x', locked: true });
+    expect(calls.setLock).toEqual([['x', true]]);
+
+    await expect(request(info, 'POST', '/api/requests', { kind: 'nope', text: 'a' })).rejects.toMatchObject({ status: 400 });
+    await request(info, 'POST', '/api/requests', { kind: 'explain', text: 'Explain', nodeId: 'n1' });
+    expect(calls.addRequest).toEqual([{ kind: 'explain', text: 'Explain', nodeId: 'n1' }]);
+    await request(info, 'POST', '/api/requests/cancel', { id: 'r1' });
+    await request(info, 'POST', '/api/requests/claim', { sessionId: 's1' });
+    expect(calls.cancelRequest).toEqual(['r1']);
+    expect(calls.claimRequests).toEqual(['s1']);
+
+    await expect(request(info, 'POST', '/api/dismiss', {})).rejects.toMatchObject({ status: 400 });
+    await request(info, 'POST', '/api/dismiss', { findingId: 'f1' });
+    expect(calls.dismiss).toEqual(['f1']);
+
+    await expect(request(info, 'POST', '/api/layout', { slots: { a: -1 } })).rejects.toMatchObject({ status: 400 });
+    await request(info, 'POST', '/api/layout', { slots: { a: 2 } });
+    expect(calls.saveLayout).toEqual([{ a: 2 }]);
+    expect(await request(info, 'GET', '/api/layout')).toEqual({ version: 1, slots: {} });
+
+    expect(await request(info, 'GET', '/api/source?file=lib%2Fa.ts&start=2&end=3')).toMatchObject({ file: 'lib/a.ts' });
+    expect(calls.source).toEqual([['lib/a.ts', 2, 3]]);
+    await expect(request(info, 'GET', '/api/source?file=nope.ts')).rejects.toMatchObject({ status: 404 });
+    await expect(request(info, 'GET', '/api/source')).rejects.toMatchObject({ status: 400 });
+    await expect(request(info, 'GET', '/api/source?file=a.ts&start=x')).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('passes HttpError statuses from deps through', async () => {
+    const { deps } = fakeDeps({
+      setLock: async () => {
+        throw new HttpError(409, 'locked through lib/');
+      },
+    });
+    server = await startServer(deps);
+    await expect(request({ port: server.port, token: TOKEN }, 'POST', '/api/locks', { nodeId: 'x', locked: false })).rejects.toMatchObject({
+      status: 409,
+      message: 'locked through lib/',
+    });
   });
 });

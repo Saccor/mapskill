@@ -6,10 +6,15 @@ import type {
   ClientMessage,
   DaemonStatus,
   Finding,
+  LayoutFile,
+  LocksAnswer,
+  MapRequest,
   PublicGraph,
+  RequestKind,
   ServerMessage,
   SimilarMatch,
   SimilarQuery,
+  SourceAnswer,
   StopAnswer,
 } from '@mapskill/core';
 import { WebSocket, WebSocketServer } from 'ws';
@@ -47,6 +52,25 @@ export interface ServerDeps {
   similar(query: SimilarQuery): Promise<SimilarMatch[]>;
   /** Text about a node (by id) or the nodes of a file (by path); null when nothing matches. */
   node(query: { id?: string; path?: string }): Promise<string | null>;
+  /** The locks and which of the project's files they cover. */
+  locks(): Promise<LocksAnswer>;
+  /** Locks or unlocks the file of a map node; throws HttpError for unknown nodes (404), nodes without a file (400) or a lock that stays (409). */
+  setLock(nodeId: string, locked: boolean): Promise<LocksAnswer>;
+  /** The map's request queue. */
+  requests(): Promise<MapRequest[]>;
+  /** Queues a request from the map; throws RangeError for text that is empty or too long. */
+  addRequest(input: { kind: RequestKind; text: string; nodeId?: string; findingId?: string }): Promise<MapRequest>;
+  /** Cancels a pending request and returns the whole queue. */
+  cancelRequest(id: string): Promise<MapRequest[]>;
+  /** Hands the pending requests to a Claude session (the hook) and marks them sent. */
+  claimRequests(sessionId: string): Promise<MapRequest[]>;
+  /** Hides a finding until the code behind it changes; throws HttpError 404 for unknown findings. */
+  dismiss(findingId: string): Promise<void>;
+  /** The saved slot of each map node. */
+  layout(): Promise<LayoutFile>;
+  saveLayout(slots: Record<string, number>): Promise<void>;
+  /** Lines of a project source file; null when the file is not one of the project's source files. */
+  source(file: string, start?: number, end?: number): Promise<SourceAnswer | null>;
   shutdown(): void;
   /** Called for every authenticated request or message (keeps the daemon from idling out). */
   activity(): void;
@@ -61,8 +85,10 @@ export interface DaemonServer {
 
 const MAX_BODY_BYTES = 1_000_000;
 const MAX_SNIPPET_CHARS = 20_000;
+const REQUEST_KINDS = new Set(['explain', 'fix', 'custom']);
+const MAX_LAYOUT_ENTRIES = 20_000;
 
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
@@ -80,6 +106,18 @@ function sameToken(given: unknown, expected: string): boolean {
 
 function optionalString(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
+}
+
+function requiredString(v: unknown, name: string): string {
+  if (typeof v !== 'string' || v === '') throw new HttpError(400, `${name} must be a non-empty string`);
+  return v;
+}
+
+function optionalPositiveInt(raw: string | null, name: string): number | undefined {
+  if (raw === null) return undefined;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new HttpError(400, `${name} must be a whole number from 1`);
+  return n;
 }
 
 async function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
@@ -177,6 +215,69 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
         const text = await deps.node(id ? { id } : { path: p });
         if (text === null) throw new HttpError(404, 'no such node');
         return send(res, 200, { text });
+      }
+      case 'GET /api/locks':
+        return send(res, 200, await deps.locks());
+      case 'POST /api/locks': {
+        const body = await readBody(req);
+        if (typeof body.locked !== 'boolean') throw new HttpError(400, 'locked must be true or false');
+        return send(res, 200, await deps.setLock(requiredString(body.nodeId, 'nodeId'), body.locked));
+      }
+      case 'GET /api/requests':
+        return send(res, 200, { requests: await deps.requests() });
+      case 'POST /api/requests': {
+        const body = await readBody(req);
+        if (!REQUEST_KINDS.has(body.kind as string)) throw new HttpError(400, 'kind must be explain, fix or custom');
+        const input = {
+          kind: body.kind as RequestKind,
+          text: requiredString(body.text, 'text'),
+          ...(typeof body.nodeId === 'string' ? { nodeId: body.nodeId } : {}),
+          ...(typeof body.findingId === 'string' ? { findingId: body.findingId } : {}),
+        };
+        try {
+          return send(res, 200, { request: await deps.addRequest(input) });
+        } catch (err) {
+          if (err instanceof RangeError) throw new HttpError(400, err.message);
+          throw err;
+        }
+      }
+      case 'POST /api/requests/cancel': {
+        const body = await readBody(req);
+        return send(res, 200, { requests: await deps.cancelRequest(requiredString(body.id, 'id')) });
+      }
+      case 'POST /api/requests/claim': {
+        const body = await readBody(req);
+        return send(res, 200, { requests: await deps.claimRequests(optionalString(body.sessionId) ?? 'default') });
+      }
+      case 'POST /api/dismiss': {
+        const body = await readBody(req);
+        await deps.dismiss(requiredString(body.findingId, 'findingId'));
+        return send(res, 200, { ok: true });
+      }
+      case 'GET /api/layout':
+        return send(res, 200, await deps.layout());
+      case 'POST /api/layout': {
+        const body = await readBody(req);
+        const slots = body.slots;
+        if (!slots || typeof slots !== 'object' || Array.isArray(slots)) throw new HttpError(400, 'slots must be an object');
+        const entries = Object.entries(slots as Record<string, unknown>);
+        if (entries.length > MAX_LAYOUT_ENTRIES) throw new HttpError(400, 'too many slots');
+        if (!entries.every(([, v]) => typeof v === 'number' && Number.isInteger(v) && v >= 0)) {
+          throw new HttpError(400, 'every slot must be a whole number from 0');
+        }
+        await deps.saveLayout(slots as Record<string, number>);
+        return send(res, 200, { ok: true });
+      }
+      case 'GET /api/source': {
+        const file = url.searchParams.get('file');
+        if (!file) throw new HttpError(400, 'file is required');
+        const answer = await deps.source(
+          file,
+          optionalPositiveInt(url.searchParams.get('start'), 'start'),
+          optionalPositiveInt(url.searchParams.get('end'), 'end'),
+        );
+        if (!answer) throw new HttpError(404, 'not a source file of this project');
+        return send(res, 200, answer);
       }
       case 'POST /api/shutdown':
         send(res, 200, { ok: true });

@@ -1,24 +1,32 @@
 import { randomBytes } from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import {
   applyFileChanges,
   findDrift,
+  findingCodeHash,
   findSimilar,
   loadProject,
   mapOverview,
   nodeDetails,
+  setDismissed,
   toPublicGraph,
   type DaemonStatus,
+  type LocksAnswer,
   type Project,
   type PublicGraph,
+  type SourceAnswer,
   type StopAnswer,
 } from '@mapskill/core';
+import { addLocks, findLock, readLocks, removeLocks } from '../locks';
 import { canonicalRoot, toProjectRel } from '../project-path';
 import { readFactsCache, writeFactsCache } from './cache';
 import { DAEMON_VERSION, readDaemonInfo, removeDaemonInfo, writeDaemonInfo, type DaemonInfo } from './info';
 import { ensureGitignore, ensureMapskillDir } from './paths';
 import { ChangeQueue, type ChangeBatch } from './queue';
-import { startServer } from './server';
+import { RequestQueue } from './requests';
+import { HttpError, startServer } from './server';
+import { readDismissed, readLayout, writeDismissed, writeLayout } from './state-files';
 import { TurnTracker } from './turns';
 import { watchProject, type ProjectWatcher } from './watcher';
 
@@ -26,6 +34,8 @@ import { watchProject, type ProjectWatcher } from './watcher';
 const MAX_RECENT_CHANGES = 5000;
 /** Findings the Stop hook shows Claude at most. */
 const MAX_STOP_FINDINGS = 5;
+const DEFAULT_SOURCE_LINES = 40;
+const MAX_SOURCE_LINES = 200;
 
 export { toProjectRel } from '../project-path';
 
@@ -62,6 +72,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
 
   const token = randomBytes(24).toString('hex');
   const turns = new TurnTracker();
+  const requestQueue = new RequestQueue(root);
   const timers: ReturnType<typeof setInterval>[] = [];
   /** Recently changed project paths with the time they were applied, oldest first. */
   const recentChanges: { path: string; at: number }[] = [];
@@ -136,7 +147,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     await new Promise<void>((resolve) => setImmediate(resolve));
     if (stopping) return;
     const started = Date.now();
-    project = loadProject(root, readFactsCache(root));
+    project = loadProject(root, readFactsCache(root), readDismissed(root));
     saveCache();
     log(`loaded ${Object.keys(project.facts).length} files in ${Date.now() - started} ms`);
   })();
@@ -147,6 +158,16 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     queue.flushNow();
     return toPublicGraph(project!.graph);
   };
+  const locksAnswer = (): LocksAnswer => {
+    const read = readLocks(root);
+    if (!read.ok) {
+      log(`locks.json unreadable: ${read.error}`);
+      return { locks: [], lockedFiles: [] };
+    }
+    const lockedFiles = Object.keys(project?.facts ?? {}).filter((f) => findLock(read.locks, f)).sort();
+    return { locks: read.locks, lockedFiles };
+  };
+  const pushRequests = (): void => server.broadcast({ type: 'requests', requests: requestQueue.list() });
 
   const server = await startServer({
     token,
@@ -191,7 +212,9 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     startTurn: async (sessionId) => {
       await loaded;
       queue.flushNow();
-      return turns.startTurn(sessionId, currentFindingIds());
+      const turnId = turns.startTurn(sessionId, currentFindingIds());
+      server.broadcast({ type: 'turn', at: Date.now(), sessionId });
+      return turnId;
     },
     findings: async ({ since, session, ...query }) => {
       await loaded;
@@ -221,6 +244,77 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       if (query.path === undefined) return nodeDetails(await graphNow(), query);
       const rel = toProjectRel(root, query.path);
       return rel === null ? null : nodeDetails(await graphNow(), { ...query, path: rel });
+    },
+    locks: async () => {
+      await loaded;
+      return locksAnswer();
+    },
+    setLock: async (nodeId, locked) => {
+      await loaded;
+      queue.flushNow();
+      const node = project!.graph.nodes.find((n) => n.id === nodeId);
+      if (!node) throw new HttpError(404, 'no such part');
+      if (!node.file) throw new HttpError(400, 'this part has no file to lock');
+      const abs = path.join(root, node.file);
+      if (locked) addLocks(root, [abs], node.label);
+      else removeLocks(root, [abs]);
+      const answer = locksAnswer();
+      server.broadcast({ type: 'locks', ...answer });
+      if (!locked && answer.lockedFiles.includes(node.file)) {
+        const read = readLocks(root);
+        const via = read.ok ? findLock(read.locks, node.file)?.path : undefined;
+        throw new HttpError(409, `still locked through ${via ?? 'another lock'}`);
+      }
+      return answer;
+    },
+    requests: async () => requestQueue.list(),
+    addRequest: async (input) => {
+      const r = requestQueue.add(input);
+      pushRequests();
+      return r;
+    },
+    cancelRequest: async (id) => {
+      if (requestQueue.cancel(id)) pushRequests();
+      return requestQueue.list();
+    },
+    claimRequests: async () => {
+      const claimed = requestQueue.claimPending();
+      if (claimed.length > 0) pushRequests();
+      return claimed;
+    },
+    dismiss: async (findingId) => {
+      await loaded;
+      queue.flushNow();
+      const finding = project!.graph.findings.find((f) => f.id === findingId);
+      if (!finding) throw new HttpError(404, 'no such finding');
+      const next = { ...project!.dismissed, [finding.id]: findingCodeHash(finding, project!.facts) };
+      const result = setDismissed(project!, next);
+      project = result.project;
+      // Entries whose finding is visible again belong to code that has changed since: forget them.
+      const visible = new Set(project.graph.findings.map((f) => f.id));
+      const kept = Object.fromEntries(Object.entries(project.dismissed).filter(([id]) => !visible.has(id)));
+      project.dismissed = kept;
+      writeDismissed(root, kept);
+      if (!result.empty) {
+        seq += 1;
+        server.broadcast({ type: 'delta', seq, delta: result.delta });
+      }
+    },
+    layout: async () => readLayout(root),
+    saveLayout: async (slots) => writeLayout(root, { version: 1, slots }),
+    source: async (file, start = 1, end): Promise<SourceAnswer | null> => {
+      await loaded;
+      const rel = toProjectRel(root, file);
+      if (rel === null || !(rel in project!.facts)) return null;
+      let text: string;
+      try {
+        text = fs.readFileSync(path.join(root, rel), 'utf8');
+      } catch {
+        return null;
+      }
+      const all = text.split('\n').map((l) => l.replace(/\r$/, ''));
+      const last = Math.min(end ?? start + DEFAULT_SOURCE_LINES - 1, start + MAX_SOURCE_LINES - 1, all.length);
+      return { file: rel, start, end: Math.max(start, last), total: all.length, lines: all.slice(start - 1, last) };
     },
     shutdown: () => {
       void stop('shutdown request');

@@ -38,7 +38,7 @@ button { font: inherit; color: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 .zone { width: 100%; height: 100%; background: var(--zone); border: 1px solid var(--border); border-radius: 10px; }
-.zone-header { all: unset; display: flex; gap: 8px; align-items: baseline; padding: 8px 16px; cursor: pointer; font-weight: 600; }
+.zone-header { all: unset; pointer-events: all; display: flex; gap: 8px; align-items: baseline; padding: 8px 16px; cursor: pointer; font-weight: 600; }
 .zone-header:focus-visible { outline: 3px solid var(--focus); border-radius: 8px; }
 .zone-count { font-weight: 400; color: var(--muted); font-size: 0.85em; }
 
@@ -51,10 +51,12 @@ button { font: inherit; color: inherit; }
 .part .warn { font-size: 0.8em; color: var(--warn); font-weight: 600; }
 .part .lock { font-size: 0.75em; color: var(--muted); }
 .part.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.part.touched { border-color: var(--accent); }
+.part.touched { border: 2px dashed var(--accent); }
 .part.pulsing { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--pulse); } 50% { box-shadow: 0 0 0 8px var(--pulse); } }
 @media (prefers-reduced-motion: reduce) {
   .part.pulsing { animation: none; outline: 3px dashed var(--accent); outline-offset: 1px; }
+  .part.pulsing:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .react-flow__edge.animated path { animation: none; }
 }
 .part-handle { opacity: 0; pointer-events: none; }

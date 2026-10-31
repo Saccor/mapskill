@@ -2,7 +2,7 @@ import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/r
 import { ZONE_LABELS, type EdgeKind, type PublicGraph, type Zone } from '@mapskill/core/client';
 import { useEffect, useMemo, useState } from 'react';
 import { NODE_TYPE_TEXT, t, type Lang } from '../i18n';
-import { layoutMap, ZONE_COLUMNS } from '../layout';
+import { layoutMap } from '../layout';
 import type { MapState } from '../reducer';
 import { findingsByNode, nextPulseEnd, partFlags, visibleEdges } from '../view-model';
 import { PartNode, type PartData } from './PartNode';
@@ -45,8 +45,7 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
     const layout = layoutMap(graph.nodes, slots, collapsed);
     const flags = partFlags(graph, state, now);
     const findings = findingsByNode(graph);
-    const zoneOrder = ZONE_COLUMNS.flat();
-    const out: Node[] = layout.zones.map((z) => ({
+        const out: Node[] = layout.zones.map((z) => ({
       id: `zone:${z.zone}`,
       type: 'zone',
       position: { x: z.x, y: z.y },
@@ -62,36 +61,50 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
         onToggle: onToggleZone,
       } satisfies ZoneData,
     }));
-    const parts = graph.nodes
-      .filter((n) => layout.positions[n.id])
-      .sort((a, b) => zoneOrder.indexOf(a.zone) - zoneOrder.indexOf(b.zone) || (slots[a.id] ?? 0) - (slots[b.id] ?? 0));
-    for (const n of parts) {
-      const f = flags[n.id];
-      const count = findings[n.id]?.length ?? 0;
-      const typeName = NODE_TYPE_TEXT[n.type].name[lang];
-      const aria = [n.label, typeName, count > 0 ? `${count} ${t(lang, 'findings').toLowerCase()}` : '', f.locked ? t(lang, 'locked') : '']
-        .filter(Boolean)
-        .join(', ');
-      out.push({
-        id: n.id,
-        type: 'part',
-        parentId: `zone:${n.zone}`,
-        extent: 'parent',
-        position: layout.positions[n.id],
-        draggable: false,
-        data: {
-          node: n,
-          health: graph.health[n.id] ?? 10,
-          findingCount: count,
-          pulsing: f.pulsing,
-          touched: f.touched,
-          locked: f.locked,
-          selected: n.id === selectedId,
-          ariaLabel: aria,
-          lockedText: t(lang, 'locked'),
-          onSelect: (id: string) => onSelect(id),
-        } satisfies PartData,
-      });
+    const bySlot = (a: { id: string }, b: { id: string }) => (slots[a.id] ?? 0) - (slots[b.id] ?? 0);
+    const parts: typeof graph.nodes = [];
+    const ordered: Node[] = [];
+    // Zone header, then that zone's parts: the tab order follows the map (parents still precede children).
+    for (const zoneNode of out) {
+      ordered.push(zoneNode);
+      const zone = (zoneNode.data as ZoneData).zone;
+      const inZone = graph.nodes.filter((n) => n.zone === zone && layout.positions[n.id]).sort(bySlot);
+      for (const n of inZone) {
+        parts.push(n);
+        const f = flags[n.id];
+        const count = findings[n.id]?.length ?? 0;
+        const health = graph.health[n.id] ?? 10;
+        const typeName = NODE_TYPE_TEXT[n.type].name[lang];
+        const aria = [
+          n.label,
+          typeName,
+          health < 10 ? t(lang, 'health', { score: health }).toLowerCase() : '',
+          count > 0 ? `${count} ${t(lang, 'findings').toLowerCase()}` : '',
+          f.locked ? t(lang, 'locked') : '',
+        ]
+          .filter(Boolean)
+          .join(', ');
+        ordered.push({
+          id: n.id,
+          type: 'part',
+          parentId: `zone:${n.zone}`,
+          extent: 'parent',
+          position: layout.positions[n.id],
+          draggable: false,
+          data: {
+            node: n,
+            health,
+            findingCount: count,
+            pulsing: f.pulsing,
+            touched: f.touched,
+            locked: f.locked,
+            selected: n.id === selectedId,
+            ariaLabel: aria,
+            lockedText: t(lang, 'locked'),
+            onSelect: (id: string) => onSelect(id),
+          } satisfies PartData,
+        });
+      }
     }
     const shown = new Set(parts.map((p) => p.id));
     const flowEdges: Edge[] = visibleEdges(graph, selectedId, showAllEdges)
@@ -103,7 +116,7 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
         label: EDGE_TEXT[e.kind][lang],
         animated: e.from === selectedId || e.to === selectedId,
       }));
-    return { nodes: out, edges: flowEdges };
+    return { nodes: ordered, edges: flowEdges };
   }, [graph, slots, collapsed, state, now, selectedId, showAllEdges, lang, onSelect, onToggleZone]);
 
   return (

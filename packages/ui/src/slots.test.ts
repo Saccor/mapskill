@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mergeForSave } from './slots';
+import { assignSlots } from './layout';
+import { mergeForSave, restorableSlots } from './slots';
 
 describe('mergeForSave', () => {
   it('keeps slots of parts that are gone and lets current ones win', () => {
@@ -11,5 +12,22 @@ describe('mergeForSave', () => {
     expect(Object.keys(out)).toHaveLength(20_000);
     expect(out.a).toBe(0);
     expect(out.b).toBe(1);
+  });
+});
+
+describe('restorableSlots', () => {
+  const node = (id: string) => ({ id, zone: 'blocks' as const });
+  it('lets a returning part keep nothing when its slot was taken meanwhile', () => {
+    // X(3) gone, Y took slot 3; X returns
+    const out = restorableSlots({ y: 3 }, { x: 3, y: 3 }, [node('x'), node('y')]);
+    expect(out).toEqual({ y: 3 });
+    expect(assignSlots([node('x'), node('y')], out).y).toBe(3);
+  });
+  it('gives the old slot back when nobody took it', () => {
+    expect(restorableSlots({ a: 0 }, { x: 3, a: 0 }, [node('x'), node('a')])).toEqual({ x: 3, a: 0 });
+  });
+  it('only compares within the same zone', () => {
+    const nodes = [{ id: 'x', zone: 'blocks' as const }, { id: 'y', zone: 'server' as const }];
+    expect(restorableSlots({ y: 3 }, { x: 3, y: 3 }, nodes).x).toBe(3);
   });
 });

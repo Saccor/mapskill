@@ -9,14 +9,36 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 export const repo = path.resolve(here, '../../..');
 
 /** Runs the CLI from source the way the daemon spawner does in development (node + tsx loader + bin.ts). */
-export function cli(args: string[], env: NodeJS.ProcessEnv = {}): { status: number | null; stdout: string; stderr: string } {
+export function cli(args: string[], env: NodeJS.ProcessEnv = {}, input?: string): { status: number | null; stdout: string; stderr: string } {
   const loader = createRequire(path.join(repo, 'packages/cli/package.json')).resolve('tsx');
   const r = spawnSync(process.execPath, ['--import', pathToFileURL(loader).href, path.join(repo, 'packages/cli/src/bin.ts'), ...args], {
     encoding: 'utf8',
     env: { ...process.env, ...env },
     timeout: 60_000,
+    input,
   });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+}
+
+/** Starts a daemon on its own temp copy of a fixture (without .mapskill/); stop() stops it and removes the copy. */
+export function startCopy(fixtureName: string): { root: string; url: string; stop(): void } {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), `mapskill-pw-${fixtureName}-`));
+  fs.cpSync(path.join(repo, 'fixtures', fixtureName), root, { recursive: true, filter: (src) => !src.split(path.sep).includes('.mapskill') });
+  const r = cli(['open', root, '--no-browser'], { MAPSKILL_UI_DIR: path.join(repo, 'packages', 'ui', 'dist') });
+  const url = /Mapskill map: (\S+)/.exec(r.stdout)?.[1];
+  if (r.status !== 0 || !url) {
+    cli(['stop', root]);
+    fs.rmSync(root, { recursive: true, force: true });
+    throw new Error(`could not start Mapskill: ${r.stdout} ${r.stderr}`);
+  }
+  return {
+    root,
+    url,
+    stop() {
+      cli(['stop', root]);
+      fs.rmSync(root, { recursive: true, force: true });
+    },
+  };
 }
 
 export default function globalSetup(): void {

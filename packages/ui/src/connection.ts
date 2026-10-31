@@ -39,6 +39,7 @@ export function useMapConnection(token: string): { state: MapState; dispatch: (a
     const refreshSideData = (): void => {
       api.locks().then((l) => dispatch({ type: 'locks', locks: l.locks, lockedFiles: l.lockedFiles }), () => {});
       api.requests().then((r) => dispatch({ type: 'requests', requests: r }), () => {});
+      api.goal().then((answer) => dispatch({ type: 'goal', answer }), () => {});
     };
     const connect = (): void => {
       const scheme = location.protocol === 'https:' ? 'wss' : 'ws';

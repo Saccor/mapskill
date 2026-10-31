@@ -47,4 +47,15 @@ describe('reduce', () => {
     s = reduce(s, { type: 'server', now: 0, message: { type: 'requests', requests: [] } });
     expect(s.requests).toEqual([]);
   });
+
+  it('keeps the goal list and the live goal status', () => {
+    const answer = { goals: [{ id: 'g', title: { en: 'G', sv: 'G' }, description: { en: '', sv: '' } }], status: null };
+    let s = reduce(initialState, { type: 'goal', answer });
+    expect(s.goals).toHaveLength(1);
+    expect(s.goal).toBeNull();
+    const live = { goalId: 'g', title: { en: 'G', sv: 'G' }, items: [], done: 0, total: 0 };
+    s = reduce(s, { type: 'server', now: 0, message: { type: 'goal', status: live } });
+    expect(s.goal).toEqual(live);
+    expect(s.goals).toHaveLength(1);
+  });
 });

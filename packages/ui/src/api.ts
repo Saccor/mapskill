@@ -1,4 +1,4 @@
-import type { LayoutFile, LocksAnswer, MapRequest, PublicGraph, RequestKind, SourceAnswer } from '@mapskill/core/client';
+import type { GoalAnswer, LayoutFile, LocksAnswer, MapRequest, PublicGraph, RequestKind, SourceAnswer } from '@mapskill/core/client';
 
 const TOKEN_KEY = 'mapskill-token';
 
@@ -55,6 +55,8 @@ export class Api {
   dismiss = async (findingId: string): Promise<void> => {
     await this.call('POST', '/api/dismiss', { findingId });
   };
+  goal = (): Promise<GoalAnswer> => this.call('GET', '/api/goal');
+  setGoal = (goalId: string | null): Promise<GoalAnswer> => this.call('POST', '/api/goal', { goalId });
   layout = (): Promise<LayoutFile> => this.call('GET', '/api/layout');
   saveLayout = async (slots: Record<string, number>): Promise<void> => {
     await this.call('POST', '/api/layout', { slots });

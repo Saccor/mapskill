@@ -1,4 +1,5 @@
-import type { PublicGraph } from '@mapskill/core/client';
+import type { GoalStatus, GoalSummary, PublicGraph } from '@mapskill/core/client';
+import { goalLine } from '../goals';
 import { t, type Lang } from '../i18n';
 import type { MapState } from '../reducer';
 import { projectHealth, unreadableLine } from '../view-model';
@@ -10,6 +11,11 @@ export function Header(props: {
   showAllEdges: boolean;
   onShowAllEdges: (v: boolean) => void;
   onToggleLang: () => void;
+  goals: GoalSummary[];
+  goal: GoalStatus | null;
+  onChooseGoal: (id: string | null) => void;
+  goalOpen: boolean;
+  onToggleGoal: () => void;
 }) {
   const { graph, status, lang } = props;
   const unreadable = graph ? unreadableLine(graph, lang) : null;
@@ -28,6 +34,27 @@ export function Header(props: {
           <span aria-hidden="true">⚠ </span>
           {unreadable}
         </span>
+      )}
+      <label className="goal-select">
+        {t(lang, 'goal')}{' '}
+        <select value={props.goal?.goalId ?? ''} onChange={(e) => props.onChooseGoal(e.target.value || null)}>
+          <option value="">{t(lang, 'noGoal')}</option>
+          {props.goals.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.title[lang]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {props.goal && (
+        <>
+          <span className="goal-progress" aria-label={goalLine(props.goal, lang)}>
+            {props.goal.done}/{props.goal.total}
+          </span>
+          <button aria-expanded={props.goalOpen} onClick={props.onToggleGoal}>
+            {t(lang, props.goalOpen ? 'hideGoal' : 'showGoal')}
+          </button>
+        </>
       )}
       <span className={`status ${status}`} role="status">
         {t(lang, status)}

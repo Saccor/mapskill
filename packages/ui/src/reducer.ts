@@ -1,4 +1,4 @@
-import { applyDelta, type LockInfo, type MapRequest, type PublicGraph, type ServerMessage } from '@mapskill/core/client';
+import { applyDelta, type GoalAnswer, type GoalStatus, type GoalSummary, type LockInfo, type MapRequest, type PublicGraph, type ServerMessage } from '@mapskill/core/client';
 
 export const PULSE_MS = 10_000;
 const MAX_ACTIVITY = 50;
@@ -20,6 +20,8 @@ export interface MapState {
   locks: LockInfo[];
   lockedFiles: string[];
   needsResync: boolean;
+  goals: GoalSummary[];
+  goal: GoalStatus | null;
 }
 
 export const initialState: MapState = {
@@ -34,13 +36,16 @@ export const initialState: MapState = {
   locks: [],
   lockedFiles: [],
   needsResync: false,
+  goals: [],
+  goal: null,
 };
 
 export type Action =
   | { type: 'server'; message: ServerMessage; now: number }
   | { type: 'status'; status: MapState['status'] }
   | { type: 'requests'; requests: MapRequest[] }
-  | { type: 'locks'; locks: LockInfo[]; lockedFiles: string[] };
+  | { type: 'locks'; locks: LockInfo[]; lockedFiles: string[] }
+  | { type: 'goal'; answer: GoalAnswer };
 
 function onServer(state: MapState, m: ServerMessage): MapState {
   switch (m.type) {
@@ -62,7 +67,7 @@ function onServer(state: MapState, m: ServerMessage): MapState {
     case 'locks':
       return { ...state, locks: m.locks, lockedFiles: m.lockedFiles };
     case 'goal':
-      return state; // The goal panel (a later M5 task) will keep this in state.
+      return { ...state, goal: m.status };
   }
 }
 
@@ -76,5 +81,7 @@ export function reduce(state: MapState, action: Action): MapState {
       return { ...state, requests: action.requests };
     case 'locks':
       return { ...state, locks: action.locks, lockedFiles: action.lockedFiles };
+    case 'goal':
+      return { ...state, goals: action.answer.goals, goal: action.answer.status };
   }
 }

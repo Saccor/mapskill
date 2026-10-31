@@ -2,10 +2,12 @@ import type { Zone } from '@mapskill/core/client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { takeToken } from './api';
 import { ActivityBar } from './components/ActivityBar';
+import { GoalPanel } from './components/GoalPanel';
 import { Header } from './components/Header';
 import { MapView } from './components/MapView';
 import { SidePanel } from './components/SidePanel';
 import { useMapConnection } from './connection';
+import { errorText } from './errors';
 import { pickLang, STRINGS, type Lang } from './i18n';
 import { useSlots } from './slots';
 import { isTextEntry } from './view-model';
@@ -25,12 +27,13 @@ function savedLang(): string | null {
 }
 
 function MapApp({ token }: { token: string }) {
-  const { state, api, stale } = useMapConnection(token);
+  const { state, dispatch, api, stale } = useMapConnection(token);
   const slots = useSlots(state.graph, api, state.status);
   const [lang, setLang] = useState<Lang>(() => pickLang(navigator.language, savedLang()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAllEdges, setShowAllEdges] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<Zone>>(() => new Set<Zone>(['tests']));
+  const [goalOpen, setGoalOpen] = useState(false);
   const [error, setError] = useState<{ text: string; at: number } | null>(null);
   const announceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [announcement, setAnnouncement] = useState('');
@@ -105,6 +108,12 @@ function MapApp({ token }: { token: string }) {
     });
   }, []);
   const select = useCallback((id: string | null) => setSelectedId(id), []);
+  const chooseGoal = (id: string | null): void => {
+    api.setGoal(id).then(
+      (answer) => dispatch({ type: 'goal', answer }),
+      (err: unknown) => showError(errorText(err, lang)),
+    );
+  };
 
   const graph = state.graph;
   const node = graph && selectedId ? graph.nodes.find((n) => n.id === selectedId) ?? null : null;
@@ -124,7 +133,14 @@ function MapApp({ token }: { token: string }) {
           {error.text}
         </p>
       )}
-      <Header graph={graph} status={state.status} lang={lang} showAllEdges={showAllEdges} onShowAllEdges={setShowAllEdges} onToggleLang={toggleLang} />
+      <Header graph={graph} status={state.status} lang={lang} showAllEdges={showAllEdges} onShowAllEdges={setShowAllEdges} onToggleLang={toggleLang}
+        goals={state.goals}
+        goal={state.goal}
+        onChooseGoal={chooseGoal}
+        goalOpen={goalOpen}
+        onToggleGoal={() => setGoalOpen((v) => !v)}
+      />
+      {state.goal && goalOpen && <GoalPanel goal={state.goal} lang={lang} onSelect={select} onClose={() => setGoalOpen(false)} />}
       <div className={`main${node ? '' : ' no-panel'}`}>
         <div className="map">
           {graph && slots ? (

@@ -30,8 +30,8 @@
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(--text); }
-.app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
-.main { display: grid; grid-template-columns: 1fr minmax(320px, 400px); min-height: 0; }
+.app { display: flex; flex-direction: column; height: 100%; }
+.main { flex: 1; display: grid; grid-template-columns: 1fr minmax(320px, 400px); min-height: 0; }
 .main.no-panel { grid-template-columns: 1fr; }
 .map { min-height: 0; }
 button { font: inherit; color: inherit; }
@@ -101,3 +101,12 @@ button { font: inherit; color: inherit; }
 .credit { margin-left: auto; color: var(--muted); font-size: 0.8em; }
 .app > .error.stale { position: static; transform: none; margin: 8px 16px 0; max-width: none; }
 .app > .error { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); z-index: 10; margin: 0; background: var(--panel); max-width: 90vw; }
+
+.goal-select select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+.goal-progress { font-variant-numeric: tabular-nums; color: var(--muted); }
+.goal-panel { border-bottom: 1px solid var(--border); background: var(--panel); padding: 8px 16px; max-height: 40vh; overflow: auto; }
+.goal-panel h2 { font-size: 1rem; margin: 0 0 6px; }
+.goal-panel ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.goal-panel li { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.goal-panel li.done { color: var(--muted); }
+.goal-panel .why { flex-basis: 100%; padding-left: 1.4em; font-size: 0.85em; }

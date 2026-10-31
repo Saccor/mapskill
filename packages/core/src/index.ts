@@ -20,3 +20,6 @@ export {
 export { createIgnoredDirFilter, createSourceFilter, isSkippedDir, listSourceFiles } from './scan/files';
 export { applyDelta, diffGraphs, isEmptyDelta, toPublicGraph, type GraphDelta, type PublicGraph } from './graph/delta';
 export * from './model/protocol';
+export { findSimilar, nameWords, type SimilarMatch, type SimilarQuery } from './agent/similar';
+export { mapOverview } from './agent/overview';
+export { nodeDetails } from './agent/details';

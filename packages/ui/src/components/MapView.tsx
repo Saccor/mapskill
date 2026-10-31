@@ -77,6 +77,12 @@ function MapViewInner({ graph, state, slots, selectedId, onSelect, showAllEdges,
   // Keyboard focus on a part that is outside the view pans the map to it; a part already in view causes no movement.
   const onFocusPart = useCallback(
     (id: string) => {
+      // The browser may scroll the clipped wrapper to reveal the focused button; the map pans with its own transform instead.
+      const wrapper = document.querySelector<HTMLElement>('.react-flow');
+      if (wrapper && (wrapper.scrollTop !== 0 || wrapper.scrollLeft !== 0)) {
+        wrapper.scrollTop = 0;
+        wrapper.scrollLeft = 0;
+      }
       const node = flow.getInternalNode(id);
       if (!node) return;
       const { width: vw, height: vh } = store.getState();

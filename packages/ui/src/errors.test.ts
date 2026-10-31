@@ -7,6 +7,8 @@ describe('errorText', () => {
   it('maps API statuses to localised text', () => {
     expect(errorText(new ApiError(400, 'x'), 'en')).toBe(t('en', 'errBadRequest'));
     expect(errorText(new ApiError(404, 'x'), 'sv')).toBe(t('sv', 'errGone'));
+    expect(errorText(new ApiError(401, 'x'), 'en')).toBe(t('en', 'staleTab'));
+    expect(errorText(new ApiError(403, 'x'), 'sv')).toBe(t('sv', 'staleTab'));
     expect(errorText(new ApiError(409, 'x'), 'sv')).toBe(t('sv', 'lockedByFolder'));
     expect(errorText(new ApiError(413, 'x'), 'en')).toBe(t('en', 'errTooLarge'));
     expect(errorText(new ApiError(500, 'x'), 'en')).toBe(t('en', 'errServer'));

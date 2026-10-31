@@ -27,6 +27,8 @@ describe('state files', () => {
   it('merges a save into the stored layout and drops the oldest entries over the cap', () => {
     expect(mergeLayout({ a: 1, gone: 2 }, { a: 5, b: 3 })).toEqual({ a: 5, gone: 2, b: 3 });
     expect(MAX_LAYOUT_ENTRIES).toBe(10_000);
+    expect(mergeLayout({ constructor: 1 }, { toString: 2 })).toEqual({ constructor: 1, toString: 2 });
+    expect(mergeLayout({}, { a: 1 })).toEqual({ a: 1 });
     const existing = Object.fromEntries(Array.from({ length: MAX_LAYOUT_ENTRIES }, (_, i) => [`old${i}`, i]));
     const out = mergeLayout(existing, { fresh1: 0, old5: 9, fresh2: 1 });
     const keys = Object.keys(out);

@@ -32,12 +32,15 @@ function MapApp({ token }: { token: string }) {
   const [showAllEdges, setShowAllEdges] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<Zone>>(() => new Set<Zone>(['tests']));
   const [error, setError] = useState<{ text: string; at: number } | null>(null);
+  const announceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [announcement, setAnnouncement] = useState('');
   const announce = useCallback((text: string) => {
     // Empty first, so the same text twice in a row is still read out.
     setAnnouncement('');
-    setTimeout(() => setAnnouncement(text), 50);
+    clearTimeout(announceTimer.current);
+    announceTimer.current = setTimeout(() => setAnnouncement(text), 50);
   }, []);
+  useEffect(() => () => clearTimeout(announceTimer.current), []);
   const showError = useCallback((text: string) => setError({ text, at: Date.now() }), []);
 
   useEffect(() => {

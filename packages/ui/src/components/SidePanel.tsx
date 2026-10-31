@@ -109,7 +109,7 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError, o
             <button onClick={() => api.addRequest({ kind: 'fix', text: fixText(f, lang), findingId: f.id, nodeId: node.id }).then(queued, fail('actionFailed'))}>
               {t(lang, 'fixWithClaude')}
             </button>
-            <button onClick={() => api.dismiss(f.id).then(() => onDone(t(lang, 'itsFine')), fail('actionFailed'))}>{t(lang, 'itsFine')}</button>
+            <button onClick={() => api.dismiss(f.id).then(() => onDone(t(lang, 'dismissedAnnounce')), fail('actionFailed'))}>{t(lang, 'itsFine')}</button>
           </div>
         ))}
       </section>

@@ -27,7 +27,7 @@ export const MAX_LAYOUT_ENTRIES = 10_000;
 
 /** The stored slots plus an incoming save (incoming wins and counts as newest); over the cap the oldest go first. */
 export function mergeLayout(existing: Record<string, number>, incoming: Record<string, number>): Record<string, number> {
-  const entries = [...Object.entries(existing).filter(([id]) => !(id in incoming)), ...Object.entries(incoming)];
+  const entries = [...Object.entries(existing).filter(([id]) => !Object.hasOwn(incoming, id)), ...Object.entries(incoming)];
   return Object.fromEntries(entries.slice(-MAX_LAYOUT_ENTRIES));
 }
 

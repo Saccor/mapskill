@@ -14,9 +14,8 @@ export const MAX_LOAD_FAILURES = 3;
 export function mergeForSave(
   known: Record<string, number>,
   current: Record<string, number>,
-  preferKnown = false,
 ): Record<string, number> {
-  const merged = preferKnown ? { ...current, ...known } : { ...known, ...current };
+  const merged = { ...known, ...current };
   const keys = Object.keys(merged);
   if (keys.length <= MAX_SAVED) return merged;
   const kept = [...keys.filter((k) => k in current), ...keys.filter((k) => !(k in current))].slice(0, MAX_SAVED);
@@ -51,6 +50,36 @@ export function computeSlots(
   prevSlots: Record<string, number>,
 ): Record<string, number> {
   return assignSlots(nodes, restorableSlots(prevSlots, { ...saved, ...lastSaved, ...prevSlots }, nodes));
+}
+
+/** The slot bookkeeping of one map session, free of React so the sequence of loads and saves can be tested. */
+export class SlotSession {
+  /** What the layout file holds (server file plus saves this session), including parts that are gone for now. */
+  private lastSaved: Record<string, number> = {};
+  private savedLayout: Record<string, number> = {};
+  private prevSlots: Record<string, number> = {};
+
+  /** The layout file was read. After a degraded start the provisional slots are dropped, so the map switches to the saved layout. */
+  loaded(layout: Record<string, number>, afterDegraded: boolean): void {
+    this.lastSaved = { ...layout };
+    this.savedLayout = layout;
+    if (afterDegraded) this.prevSlots = {};
+  }
+
+  compute(nodes: { id: string; zone: Zone }[]): Record<string, number> {
+    this.prevSlots = computeSlots(nodes, this.savedLayout, this.lastSaved, this.prevSlots);
+    return this.prevSlots;
+  }
+
+  /** What to save for these slots, or null when the file already has them. */
+  pendingSave(slots: Record<string, number>): Record<string, number> | null {
+    if (Object.entries(slots).every(([id, slot]) => this.lastSaved[id] === slot)) return null;
+    return mergeForSave(this.lastSaved, slots);
+  }
+
+  saved(merged: Record<string, number>): void {
+    this.lastSaved = merged;
+  }
 }
 
 export type LayoutLoad = { loaded: boolean; failures: number };
@@ -91,11 +120,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 export function useSlots(graph: PublicGraph | null, api: Api, status: MapState['status']): Record<string, number> | null {
   const [saved, setSaved] = useState<Record<string, number> | null>(null);
   const [load, setLoad] = useState<LayoutLoad>({ loaded: false, failures: 0 });
-  // Everything persisted so far (server file plus saves this session), including parts that are gone for now.
-  const lastSaved = useRef<Record<string, number>>({});
-  const prevSlots = useRef<Record<string, number>>({});
-  // True after a load that came late: slots computed without the layout must not overwrite what was saved.
-  const recovered = useRef(false);
+  const session = useRef(new SlotSession());
   const loadedRef = useRef(false);
   const inFlight = useRef(false);
   const failuresRef = useRef(0);
@@ -111,8 +136,7 @@ export function useSlots(graph: PublicGraph | null, api: Api, status: MapState['
           inFlight.current = false;
           if (cancelled) return;
           loadedRef.current = true;
-          recovered.current = failuresRef.current >= MAX_LOAD_FAILURES;
-          lastSaved.current = { ...l.slots };
+          session.current.loaded(l.slots, failuresRef.current >= MAX_LOAD_FAILURES);
           setSaved(l.slots);
           setLoad({ loaded: true, failures: failuresRef.current });
         },
@@ -143,23 +167,16 @@ export function useSlots(graph: PublicGraph | null, api: Api, status: MapState['
 
   const phase = layoutPhase(load);
   const slots = useMemo(
-    () => (graph && saved && phase !== 'loading' ? computeSlots(graph.nodes, saved, lastSaved.current, prevSlots.current) : null),
+    () => (graph && saved && phase !== 'loading' ? session.current.compute(graph.nodes) : null),
     [graph, saved, phase],
   );
   useEffect(() => {
-    if (slots) prevSlots.current = slots;
-  }, [slots]);
-  useEffect(() => {
     if (!graph || !slots) return;
-    const dirty = !Object.entries(slots).every(([id, slot]) => lastSaved.current[id] === slot);
-    if (!shouldSave({ ...load, dirty })) return;
+    const merged = session.current.pendingSave(slots);
+    if (!shouldSave({ ...load, dirty: merged !== null }) || !merged) return;
     const timer = setTimeout(() => {
-      const merged = mergeForSave(lastSaved.current, slots, recovered.current);
       api.saveLayout(merged).then(
-        () => {
-          lastSaved.current = merged;
-          recovered.current = false;
-        },
+        () => session.current.saved(merged),
         (err: unknown) => console.warn('layout save failed', err),
       );
     }, SAVE_DELAY_MS);

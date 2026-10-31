@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assignSlots } from './layout';
-import { computeSlots, layoutPhase, mergeForSave, restorableSlots, shouldSave, withTimeout } from './slots';
+import { computeSlots, layoutPhase, mergeForSave, restorableSlots, shouldSave, SlotSession, withTimeout } from './slots';
 
 describe('mergeForSave', () => {
   it('keeps slots of parts that are gone and lets current ones win', () => {
@@ -15,9 +15,33 @@ describe('mergeForSave', () => {
   });
 });
 
-describe('mergeForSave after a late load', () => {
-  it('lets the saved layout win over slots computed without it', () => {
-    expect(mergeForSave({ a: 5 }, { a: 0, b: 1 }, true)).toEqual({ a: 5, b: 1 });
+describe('SlotSession after a degraded start', () => {
+  const nodes = (...ids: string[]) => ids.map((id) => ({ id, zone: 'blocks' as const }));
+  it('switches to the saved layout on a late load and never writes provisional slots over it', () => {
+    const file = { b: 0, a: 1 };
+    const session = new SlotSession();
+    // Three failed loads: the map shows with no remembered layout, and nothing may be saved.
+    const provisional = session.compute(nodes('a', 'b'));
+    expect(provisional).toEqual({ a: 0, b: 1 });
+    // The load finally succeeds.
+    session.loaded(file, true);
+    const afterLoad = session.compute(nodes('a', 'b'));
+    expect(afterLoad).toEqual({ b: 0, a: 1 });
+    let disk: Record<string, number> = { ...file };
+    // First save: nothing new, nothing to write.
+    expect(session.pendingSave(afterLoad)).toBeNull();
+    // A graph change adds a part: the save keeps the file's slots.
+    const next = session.compute(nodes('a', 'b', 'c'));
+    const save = session.pendingSave(next)!;
+    disk = save;
+    session.saved(save);
+    expect(disk.a).toBe(1);
+    expect(disk.b).toBe(0);
+    // And another change after that.
+    const again = session.compute(nodes('a', 'b', 'c', 'd'));
+    disk = session.pendingSave(again)!;
+    expect(disk).toMatchObject({ a: 1, b: 0 });
+    expect(new Set(Object.values(again)).size).toBe(4);
   });
 });
 

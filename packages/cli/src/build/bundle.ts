@@ -79,7 +79,10 @@ export async function bundlePlugin(outdirArg: string, options: { uiDir?: string 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const outdir = process.argv[2] ?? 'plugin/dist';
   bundlePlugin(outdir).then(
-    (r) => process.stdout.write(`Bundled ${r.entry}\n`),
+    (r) => {
+      process.stdout.write(`Bundled ${r.entry}\n`);
+      if (!r.ui) process.stderr.write('Warning: map view not built: run pnpm build:ui\n');
+    },
     (err: unknown) => {
       process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
       process.exit(1);

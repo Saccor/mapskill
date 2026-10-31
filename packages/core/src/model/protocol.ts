@@ -19,11 +19,55 @@ export interface ActivityFile {
   by: 'claude' | 'watcher';
 }
 
+export interface LockInfo {
+  path: string;
+  label?: string;
+  lockedAt: number;
+}
+
+export type RequestKind = 'explain' | 'fix' | 'custom';
+export type RequestStatus = 'pending' | 'sent' | 'cancelled';
+
+/** A request the user queued in the map for Claude. */
+export interface MapRequest {
+  id: string;
+  kind: RequestKind;
+  text: string;
+  nodeId?: string;
+  findingId?: string;
+  createdAt: number;
+  status: RequestStatus;
+  sentAt?: number;
+}
+
+/** Saved box positions: node id -> slot number within its zone. */
+export interface LayoutFile {
+  version: 1;
+  slots: Record<string, number>;
+}
+
+export interface LocksAnswer {
+  locks: LockInfo[];
+  lockedFiles: string[];
+}
+
+/** A window of lines from one source file. `start` and `end` are 1-based, inclusive. */
+export interface SourceAnswer {
+  file: string;
+  start: number;
+  end: number;
+  total: number;
+  lines: string[];
+}
+
 /** Messages the daemon sends over WebSocket. */
 export type ServerMessage =
   | { type: 'graph'; seq: number; graph: PublicGraph }
   | { type: 'delta'; seq: number; delta: GraphDelta }
-  | { type: 'activity'; at: number; files: ActivityFile[] };
+  | { type: 'activity'; at: number; files: ActivityFile[] }
+  | { type: 'turn'; at: number; sessionId: string }
+  | { type: 'requests'; requests: MapRequest[] }
+  | { type: 'locks'; locks: LockInfo[]; lockedFiles: string[] };
 
 /** The only message a client sends: it must be the first one. */
 export type ClientMessage = { type: 'hello'; token: string };

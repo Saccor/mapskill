@@ -4,7 +4,7 @@ import { buildModel } from '../adapters/build-model';
 import { isNextProject, readPrismaModels } from '../adapters/nextjs/project';
 import { computeHealth } from '../analyze/health';
 import { runAnalyzers } from '../analyze/index';
-import type { FileFacts, FileLink, Framework, Graph } from '../model/types';
+import type { FileFacts, FileLink, Finding, Framework, Graph } from '../model/types';
 import { extractFacts } from '../parse/extract';
 import { createResolver, type Resolver } from '../resolve/resolver';
 import { createSourceFilter, listSourceFiles } from '../scan/files';
@@ -26,6 +26,13 @@ export interface Project {
   /** Source files that exist but were not read (too large or unreadable). */
   skipped: Set<string>;
   graph: Graph;
+  /** Findings the user marked as fine: finding id -> code hash when dismissed. Hidden while the code is unchanged. */
+  dismissed: Record<string, string>;
+}
+
+/** Hash of the code a finding is about: the content hashes of its files. */
+export function findingCodeHash(finding: Finding, files: Record<string, FileFacts>): string {
+  return sha1(finding.files.map((p) => files[p]?.hash ?? '').join('|'));
 }
 
 export type ReadResult = FileFacts | 'missing' | 'skipped';
@@ -70,7 +77,11 @@ export function storeRead(project: Project, rel: string, result: ReadResult): bo
   return !known;
 }
 
-export function loadProject(root: string, cached: Record<string, FileFacts> = {}): Project {
+export function loadProject(
+  root: string,
+  cached: Record<string, FileFacts> = {},
+  dismissed: Record<string, string> = {},
+): Project {
   const project: Project = {
     root,
     framework: isNextProject(root) ? 'nextjs' : 'generic',
@@ -80,6 +91,7 @@ export function loadProject(root: string, cached: Record<string, FileFacts> = {}
     facts: {},
     skipped: new Set(),
     graph: undefined as unknown as Graph,
+    dismissed: { ...dismissed },
   };
   for (const rel of listSourceFiles(root)) storeRead(project, rel, readSourceFile(root, rel, cached[rel]));
   project.graph = buildGraph(project);
@@ -132,7 +144,7 @@ export function buildGraph(project: Project): Graph {
   const hasAppDir = ['app', 'src/app', 'pages', 'src/pages'].some((d) => fs.existsSync(path.join(root, d)));
   const degraded =
     project.skipped.size > 0 || unresolvedLocal || Boolean(resolver.configError) || (framework === 'generic' && hasAppDir);
-  const findings = runAnalyzers({
+  const all = runAnalyzers({
     files,
     links,
     nodes: model.nodes,
@@ -142,6 +154,7 @@ export function buildGraph(project: Project): Graph {
     degraded,
     shadcn: project.shadcn,
   });
+  const findings = all.filter((f) => project.dismissed[f.id] !== findingCodeHash(f, files));
   return {
     root,
     framework,
@@ -191,7 +204,7 @@ export function applyFileChanges(project: Project, paths: string[]): ChangeResul
     return { project: next, delta, reloaded, empty: isEmptyDelta(delta, before) };
   };
 
-  if (rels.some(isProjectConfigFile)) return finish(loadProject(project.root, project.facts), true);
+  if (rels.some(isProjectConfigFile)) return finish(loadProject(project.root, project.facts, project.dismissed), true);
 
   const isSource = createSourceFilter(project.root);
   const relevant = rels.filter((r) => isSource(r) || r in project.facts || project.skipped.has(r));
@@ -205,6 +218,15 @@ export function applyFileChanges(project: Project, paths: string[]): ChangeResul
   if (fileSetChanged) project.resolver.clearCache();
   project.graph = buildGraph(project);
   return finish(project, false);
+}
+
+/** Replaces the dismissed findings and rebuilds the graph. */
+export function setDismissed(project: Project, dismissed: Record<string, string>): ChangeResult {
+  const before = toPublicGraph(project.graph);
+  project.dismissed = { ...dismissed };
+  project.graph = buildGraph(project);
+  const delta = diffGraphs(before, toPublicGraph(project.graph));
+  return { project, delta, reloaded: false, empty: isEmptyDelta(delta, before) };
 }
 
 /** Source files that appeared, disappeared or got a different mtime since they were last read. Used as a safety net for missed watcher events. */

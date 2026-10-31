@@ -27,7 +27,7 @@ import { ChangeQueue, type ChangeBatch } from './queue';
 import { RequestQueue } from './requests';
 import { HttpError, startServer } from './server';
 import { findUiDir } from './ui-dir';
-import { readDismissed, readLayout, writeDismissed, writeLayout } from './state-files';
+import { mergeLayout, readDismissed, readLayout, writeDismissed, writeLayout } from './state-files';
 import { TurnTracker } from './turns';
 import { watchProject, type ProjectWatcher } from './watcher';
 
@@ -310,7 +310,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       }
     },
     layout: async () => readLayout(root),
-    saveLayout: async (slots) => writeLayout(root, { version: 1, slots }),
+    saveLayout: async (slots) => writeLayout(root, { version: 1, slots: mergeLayout(readLayout(root).slots, slots) }),
     source: async (file, start = 1, end): Promise<SourceAnswer | null> => {
       await loaded;
       const rel = toProjectRel(root, file);

@@ -25,7 +25,7 @@ function savedLang(): string | null {
 
 function MapApp({ token }: { token: string }) {
   const { state, api } = useMapConnection(token);
-  const slots = useSlots(state.graph, api);
+  const slots = useSlots(state.graph, api, state.status);
   const [lang, setLang] = useState<Lang>(() => pickLang(navigator.language, savedLang()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAllEdges, setShowAllEdges] = useState(false);

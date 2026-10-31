@@ -18,6 +18,7 @@ import type {
   StopAnswer,
 } from '@mapskill/core';
 import { WebSocket, WebSocketServer } from 'ws';
+import { MAX_LAYOUT_ENTRIES } from './state-files';
 import { isStaticRequest, serveStatic } from './static';
 
 export interface FindingsQuery {
@@ -89,7 +90,6 @@ export interface DaemonServer {
 const MAX_BODY_BYTES = 1_000_000;
 const MAX_SNIPPET_CHARS = 20_000;
 const REQUEST_KINDS = new Set(['explain', 'fix', 'custom']);
-const MAX_LAYOUT_ENTRIES = 20_000;
 
 export class HttpError extends Error {
   constructor(

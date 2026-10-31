@@ -303,6 +303,11 @@ describe('startDaemon', () => {
     const h = await start(root, { watch: false });
     await request(h.info, 'POST', '/api/layout', { slots: { 'helper:lib/a.ts#sumA': 4 } });
     expect(await request(h.info, 'GET', '/api/layout')).toEqual({ version: 1, slots: { 'helper:lib/a.ts#sumA': 4 } });
+    await request(h.info, 'POST', '/api/layout', { slots: { 'helper:lib/b.ts#sumB': 1 } });
+    expect((await request<{ slots: Record<string, number> }>(h.info, 'GET', '/api/layout')).slots).toEqual({
+      'helper:lib/a.ts#sumA': 4,
+      'helper:lib/b.ts#sumB': 1,
+    });
     const src = await request<{ file: string; start: number; end: number; total: number; lines: string[] }>(
       h.info, 'GET', '/api/source?file=lib/a.ts&start=2&end=3',
     );

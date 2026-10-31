@@ -22,6 +22,15 @@ export function readLayout(root: string): LayoutFile {
   return { version: 1, slots };
 }
 
+/** Most slots kept in layout.json: a full save of this size still fits the 1 MB request body limit. */
+export const MAX_LAYOUT_ENTRIES = 10_000;
+
+/** The stored slots plus an incoming save (incoming wins and counts as newest); over the cap the oldest go first. */
+export function mergeLayout(existing: Record<string, number>, incoming: Record<string, number>): Record<string, number> {
+  const entries = [...Object.entries(existing).filter(([id]) => !(id in incoming)), ...Object.entries(incoming)];
+  return Object.fromEntries(entries.slice(-MAX_LAYOUT_ENTRIES));
+}
+
 export function writeLayout(root: string, layout: LayoutFile): void {
   ensureMapskillDir(root);
   writeJsonAtomic(mapskillPath(root, 'layout.json'), { version: 1, slots: layout.slots });

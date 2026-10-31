@@ -48,7 +48,8 @@ export function restorableSlots(
  * grow or shift. The ghost's slot must be free: no present part holds it. The heir is the first matched part in
  * the ghost's zone that either has no slot yet, or has one but was first seen in this session while a ghost was
  * shown (`fresh`, never a part from the layout loaded at session start). That covers multi-step builds, where
- * the route appears before the item turns done. Such a part moves once, from its fresh slot to the ghost's slot;
+ * the route appears before the item turns done. A part inherits at most once per pass, even if it satisfies
+ * two items. Such a part moves once, from its fresh slot to the ghost's slot;
  * its old slot is released and no other part moves.
  * Returns extra remembered slots to merge in.
  */
@@ -63,6 +64,7 @@ export function inheritGhostSlots(
   const held = new Set<string>();
   for (const n of nodes) if (n.id in remembered) held.add(`${n.zone}:${remembered[n.id]}`);
   const byId = new Map(nodes.map((n) => [n.id, n]));
+  const assigned = new Set<string>();
   for (const item of goal.items) {
     if (!item.done || !item.zone) continue;
     const slot = remembered[`${GHOST_PREFIX}${item.id}`];
@@ -71,10 +73,11 @@ export function inheritGhostSlots(
     if (held.has(key)) continue;
     const heir = item.matchedNodeIds
       .map((id) => byId.get(id))
-      .find((n) => n && n.zone === item.zone && (!(n.id in remembered) || fresh.has(n.id)));
+      .find((n) => n && n.zone === item.zone && !assigned.has(n.id) && (!(n.id in remembered) || fresh.has(n.id)));
     if (!heir) continue;
     if (heir.id in remembered) held.delete(`${heir.zone}:${remembered[heir.id]}`);
     out[heir.id] = slot;
+    assigned.add(heir.id);
     held.add(key);
   }
   return out;
@@ -118,6 +121,8 @@ export class SlotSession {
     }
     this.computed = true;
     this.prevSlots = computeSlots(nodes, this.savedLayout, this.lastSaved, this.prevSlots, goal, this.freshWithGhost);
+    // A part is fresh only until its item first turns done, so it can never move a second time.
+    for (const item of goal?.items ?? []) if (item.done) for (const id of item.matchedNodeIds) this.freshWithGhost.delete(id);
     return this.prevSlots;
   }
 

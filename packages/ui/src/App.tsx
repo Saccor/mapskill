@@ -78,9 +78,12 @@ function MapApp({ token }: { token: string }) {
       if (e.key !== 'Escape') return;
       const target = e.target;
       if (target instanceof HTMLElement && isTextEntry(target)) return;
-      // The goal panel goes first; a second Escape then deselects the part.
-      if (goalPanelOpen) closeGoal();
-      else setSelectedId(null);
+      // Focus decides: inside the goal panel (or on its button) Escape closes it; otherwise a selected part
+      // is deselected first, and only then the goal panel closes.
+      const active = document.activeElement;
+      const inGoal = active instanceof HTMLElement && (active === goalToggle.current || !!active.closest('.goal-panel'));
+      if (goalPanelOpen && (inGoal || !hasNode)) closeGoal();
+      else if (hasNode) setSelectedId(null);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);

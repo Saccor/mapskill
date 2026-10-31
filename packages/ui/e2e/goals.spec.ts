@@ -78,3 +78,14 @@ test('the goal panel takes focus when it opens, Escape closes it and returns foc
   await page.getByLabel('Goal').selectOption('');
   await expect(page.locator('.goal-progress')).toHaveCount(0);
 });
+
+test('Escape closes the ghost panel first and leaves the goal panel open', async ({ page }) => {
+  await page.goto(app.url);
+  await page.getByLabel('Goal').selectOption('saas-auth-payments');
+  await page.getByRole('button', { name: 'Show goal' }).click();
+  await page.locator('.goal-panel').getByRole('button', { name: 'Checkout endpoint' }).click();
+  await expect(page.locator('aside.ghost-panel h2')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('aside.ghost-panel')).toHaveCount(0);
+  await expect(page.locator('.goal-panel')).toBeVisible();
+});

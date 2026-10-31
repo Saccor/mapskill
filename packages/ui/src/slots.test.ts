@@ -170,3 +170,37 @@ describe('inheritGhostSlots in multi-step builds', () => {
     expect(inheritGhostSlots([a, b], { 'ghost:checkout': 4 }, g)).toEqual({ [a.id]: 4 });
   });
 });
+
+describe('inheritGhostSlots: one move, one heir', () => {
+  type It = GoalStatus['items'][number];
+  const item = (over: Partial<It>): It =>
+    ({ id: 'checkout', title: { en: 'C', sv: 'C' }, why: { en: '', sv: '' }, done: true, zone: 'server', nodeType: 'api-route', matchedNodeIds: [], ...over });
+  const goalOf = (...items: It[]): GoalStatus => ({ goalId: 'g', title: { en: 'G', sv: 'G' }, done: items.length, total: items.length, items });
+  const ghost = { id: 'ghost:checkout', zone: 'server' as const };
+  const route = { id: 'api-route:app/api/checkout/route.ts', zone: 'server' as const };
+  const other = { id: 'api-route:app/api/other/route.ts', zone: 'server' as const };
+
+  it('does not move a part a second time when its item goes done, undone, done', () => {
+    const session = new SlotSession();
+    session.loaded({}, false);
+    const pending = goalOf(item({ done: false }));
+    const done = goalOf(item({ matchedNodeIds: [route.id] }));
+    session.compute([other, ghost], pending);
+    session.compute([other, ghost, route], pending);
+    const s3 = session.compute([other, route], done);
+    const slot = s3[route.id];
+    session.compute([other, route, ghost], pending); // undone: the ghost is back (in a new slot)
+    const s5 = session.compute([other, route], done);
+    expect(s5[route.id]).toBe(slot);
+  });
+
+  it('lets one part inherit once when it matches two items, leaving no slot reserved', () => {
+    const webhook = { id: 'api-route:app/api/webhook/route.ts', zone: 'server' as const };
+    const g = goalOf(item({ id: 'checkout', matchedNodeIds: [webhook.id] }), item({ id: 'webhook', matchedNodeIds: [webhook.id] }));
+    const out = inheritGhostSlots([webhook], { 'ghost:checkout': 4, 'ghost:webhook': 5 }, g);
+    expect(out).toEqual({ [webhook.id]: 4 });
+    const slots = computeSlots([webhook, other], {}, {}, { 'ghost:checkout': 4, 'ghost:webhook': 5 }, g);
+    expect(slots[webhook.id]).toBe(4);
+    expect(Object.values(slots).sort()).toEqual([0, 4]);
+  });
+});

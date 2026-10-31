@@ -10,20 +10,24 @@ export function findingsByNode(graph: PublicGraph): Record<string, Finding[]> {
   return out;
 }
 
+export type PartFlags = { pulsing: boolean; touched: boolean; locked: boolean; unreadable: boolean };
+
 export function partFlags(
   graph: PublicGraph,
   s: Pick<MapState, 'pulseUntil' | 'touchedThisTurn' | 'lockedFiles'>,
   now: number,
-): Record<string, { pulsing: boolean; touched: boolean; locked: boolean }> {
+): Record<string, PartFlags> {
   const touched = new Set(s.touchedThisTurn);
   const locked = new Set(s.lockedFiles);
-  const out: Record<string, { pulsing: boolean; touched: boolean; locked: boolean }> = {};
+  const unreadable = new Set(graph.unreadableFiles);
+  const out: Record<string, PartFlags> = {};
   for (const n of graph.nodes) {
     const f = n.file;
     out[n.id] = {
       pulsing: f !== undefined && (s.pulseUntil[f] ?? 0) > now,
       touched: f !== undefined && touched.has(f),
       locked: f !== undefined && locked.has(f),
+      unreadable: f !== undefined && unreadable.has(f),
     };
   }
   return out;
@@ -64,4 +68,12 @@ export function activityLine(a: Activity, graph: PublicGraph | null, lang: Lang)
   const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ` +${names.length - 3}` : '');
   const who = a.files.some((f) => f.by === 'claude') ? t(lang, 'byClaude') : t(lang, 'byYou');
   return t(lang, 'activityLine', { who, files: shown });
+}
+
+/** The header line for files the scan could not read (at most three names), or null when there are none. */
+export function unreadableLine(graph: PublicGraph, lang: Lang): string | null {
+  const files = graph.unreadableFiles;
+  if (files.length === 0) return null;
+  const shown = files.slice(0, 3).join(', ') + (files.length > 3 ? ` +${files.length - 3}` : '');
+  return t(lang, 'unreadable', { files: shown });
 }

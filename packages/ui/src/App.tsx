@@ -31,6 +31,12 @@ function MapApp({ token }: { token: string }) {
   const [showAllEdges, setShowAllEdges] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<Zone>>(() => new Set<Zone>(['tests']));
   const [error, setError] = useState<{ text: string; at: number } | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  const announce = useCallback((text: string) => {
+    // Empty first, so the same text twice in a row is still read out.
+    setAnnouncement('');
+    setTimeout(() => setAnnouncement(text), 50);
+  }, []);
   const showError = useCallback((text: string) => setError({ text, at: Date.now() }), []);
 
   useEffect(() => {
@@ -94,6 +100,9 @@ function MapApp({ token }: { token: string }) {
 
   return (
     <div className="app">
+      <p className="sr-only" aria-live="polite">
+        {announcement}
+      </p>
       {error && (
         <p className="error" role="alert">
           {error.text}
@@ -110,7 +119,7 @@ function MapApp({ token }: { token: string }) {
         </div>
         {graph && node && (
           <div className="panel-wrap">
-            <SidePanel key={node.id} graph={graph} node={node} locked={!!node.file && state.lockedFiles.includes(node.file)} lang={lang} api={api} onSelect={select} onError={showError} />
+            <SidePanel key={node.id} graph={graph} node={node} locked={!!node.file && state.lockedFiles.includes(node.file)} lang={lang} api={api} onSelect={select} onError={showError} onDone={announce} />
           </div>
         )}
       </div>

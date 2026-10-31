@@ -99,6 +99,7 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
           health < 10 ? t(lang, 'health', { score: health }).toLowerCase() : '',
           count > 0 ? `${count} ${t(lang, 'findings').toLowerCase()}` : '',
           f.locked ? t(lang, 'locked') : '',
+          f.unreadable ? t(lang, 'unreadableShort') : '',
         ]
           .filter(Boolean)
           .join(', ');
@@ -116,9 +117,11 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
             pulsing: f.pulsing,
             touched: f.touched,
             locked: f.locked,
+            unreadable: f.unreadable,
             selected: n.id === selectedId,
             ariaLabel: aria,
             lockedText: t(lang, 'locked'),
+            unreadableText: t(lang, 'unreadableShort'),
             onSelect: (id: string) => onSelect(id),
           } satisfies PartData,
         });

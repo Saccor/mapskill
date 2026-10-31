@@ -1,6 +1,6 @@
 import type { PublicGraph } from '@mapskill/core/client';
 import { describe, expect, it } from 'vitest';
-import { activityLine, findingsByNode, nextPulseEnd, partFlags, projectHealth, related, visibleEdges } from './view-model';
+import { activityLine, unreadableLine, findingsByNode, nextPulseEnd, partFlags, projectHealth, related, visibleEdges } from './view-model';
 
 const g: PublicGraph = {
   root: '/p', framework: 'nextjs', fileCount: 3, unreadableFiles: [],
@@ -28,9 +28,25 @@ describe('view model', () => {
 
   it('flags pulsing, touched and locked parts by file', () => {
     const flags = partFlags(g, { pulseUntil: { 'lib/date.ts': 5000 }, touchedThisTurn: ['app/page.tsx'], lockedFiles: ['lib/date.ts'] }, 4000);
-    expect(flags['helper:lib/date.ts#formatDate']).toEqual({ pulsing: true, touched: false, locked: true });
-    expect(flags['page:app/page.tsx']).toEqual({ pulsing: false, touched: true, locked: false });
-    expect(flags['table:orders']).toEqual({ pulsing: false, touched: false, locked: false });
+    expect(flags['helper:lib/date.ts#formatDate']).toEqual({ pulsing: true, touched: false, locked: true, unreadable: false });
+    expect(flags['page:app/page.tsx']).toEqual({ pulsing: false, touched: true, locked: false, unreadable: false });
+    expect(flags['table:orders']).toEqual({ pulsing: false, touched: false, locked: false, unreadable: false });
+    expect(nextPulseEnd({ a: 5000, b: 3000 }, 4000)).toBe(5000);
+    expect(nextPulseEnd({ a: 3000 }, 4000)).toBeNull();
+  });
+
+  it('flags parts whose file could not be read, and words the header line', () => {
+    const bad = { ...g, unreadableFiles: ['lib/date.ts'] };
+    const flags = partFlags(bad, { pulseUntil: {}, touchedThisTurn: [], lockedFiles: [] }, 0);
+    expect(flags['helper:lib/date.ts#formatDate'].unreadable).toBe(true);
+    expect(flags['page:app/page.tsx'].unreadable).toBe(false);
+    expect(unreadableLine(g, 'en')).toBeNull();
+    expect(unreadableLine(bad, 'en')).toBe('Could not read: lib/date.ts');
+    const many = { ...g, unreadableFiles: ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'] };
+    expect(unreadableLine(many, 'sv')).toBe('Kunde inte läsas: a.ts, b.ts, c.ts +2');
+  });
+
+  it('keeps the pulse end helper', () => {
     expect(nextPulseEnd({ a: 5000, b: 3000 }, 4000)).toBe(5000);
     expect(nextPulseEnd({ a: 3000 }, 4000)).toBeNull();
   });

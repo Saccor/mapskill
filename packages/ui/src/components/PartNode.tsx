@@ -9,9 +9,11 @@ export type PartData = {
   pulsing: boolean;
   touched: boolean;
   locked: boolean;
+  unreadable: boolean;
   selected: boolean;
   ariaLabel: string;
   lockedText: string;
+  unreadableText: string;
   onSelect: (id: string) => void;
 };
 
@@ -27,6 +29,7 @@ export function PartNode({ data }: NodeProps<Node<PartData>>) {
         <span className="label">{data.node.label}</span>
         {data.health < 10 && <span className="badge">{data.health}/10</span>}
         {data.findingCount > 0 && <span className="warn" aria-hidden="true">⚠ {data.findingCount}</span>}
+        {data.unreadable && <span className="unreadable" aria-hidden="true">⚠ {data.unreadableText}</span>}
         {data.locked && <span className="lock" aria-hidden="true">🔒 {data.lockedText}</span>}
       </button>
       <Handle type="source" position={Position.Right} isConnectable={false} className="part-handle" />

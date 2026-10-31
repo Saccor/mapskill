@@ -49,6 +49,9 @@ button { font: inherit; color: inherit; }
 .part .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .part .badge { font-size: 0.8em; color: var(--muted); }
 .part .warn { font-size: 0.8em; color: var(--warn); font-weight: 600; }
+.part .unreadable { font-size: 0.75em; color: var(--warn); font-weight: 600; }
+.unreadable-line { color: var(--warn); font-weight: 600; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .part .lock { font-size: 0.75em; color: var(--muted); }
 .part.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .part.touched { border: 2px dashed var(--accent); }

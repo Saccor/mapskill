@@ -16,9 +16,11 @@ export interface SidePanelProps {
   api: Api;
   onSelect: (id: string | null) => void;
   onError: (text: string) => void;
+  /** Called after Ask, Fix or It's fine went through, so the page can announce it. */
+  onDone: (text: string) => void;
 }
 
-export function SidePanel({ graph, node, locked, lang, api, onSelect, onError }: SidePanelProps) {
+export function SidePanel({ graph, node, locked, lang, api, onSelect, onError, onDone }: SidePanelProps) {
   const [copied, setCopied] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -33,6 +35,7 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError }:
     console.warn(err);
     onError(t(lang, key, { error: errorText(err, lang) }));
   };
+  const queued = (): void => onDone(t(lang, 'requestQueued'));
   const failCopy = (err: unknown): void => {
     console.warn(err);
     onError(t(lang, 'copyFailed'));
@@ -78,7 +81,7 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError }:
             {locked ? `🔓 ${t(lang, 'unlock')}` : `🔒 ${t(lang, 'lock')}`}
           </button>
         )}
-        <button onClick={() => api.addRequest({ kind: 'explain', text: explainText(node, lang), nodeId: node.id }).catch(fail('actionFailed'))}>
+        <button onClick={() => api.addRequest({ kind: 'explain', text: explainText(node, lang), nodeId: node.id }).then(queued, fail('actionFailed'))}>
           {t(lang, 'ask')}
         </button>
         <button
@@ -103,10 +106,10 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError }:
               <span aria-hidden="true">⚠ </span>
               {f.message[lang]} <span className="muted">({f.certainty === 'certain' ? (lang === 'sv' ? 'säkert' : 'certain') : lang === 'sv' ? 'troligt' : 'likely'})</span>
             </p>
-            <button onClick={() => api.addRequest({ kind: 'fix', text: fixText(f, lang), findingId: f.id, nodeId: node.id }).catch(fail('actionFailed'))}>
+            <button onClick={() => api.addRequest({ kind: 'fix', text: fixText(f, lang), findingId: f.id, nodeId: node.id }).then(queued, fail('actionFailed'))}>
               {t(lang, 'fixWithClaude')}
             </button>
-            <button onClick={() => api.dismiss(f.id).catch(fail('actionFailed'))}>{t(lang, 'itsFine')}</button>
+            <button onClick={() => api.dismiss(f.id).then(() => onDone(t(lang, 'itsFine')), fail('actionFailed'))}>{t(lang, 'itsFine')}</button>
           </div>
         ))}
       </section>

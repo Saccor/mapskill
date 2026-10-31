@@ -1,7 +1,7 @@
 import type { PublicGraph } from '@mapskill/core/client';
 import { t, type Lang } from '../i18n';
 import type { MapState } from '../reducer';
-import { projectHealth } from '../view-model';
+import { projectHealth, unreadableLine } from '../view-model';
 
 export function Header(props: {
   graph: PublicGraph | null;
@@ -12,6 +12,7 @@ export function Header(props: {
   onToggleLang: () => void;
 }) {
   const { graph, status, lang } = props;
+  const unreadable = graph ? unreadableLine(graph, lang) : null;
   const name = graph ? graph.root.split(/[\\/]/).filter(Boolean).pop() : '';
   return (
     <header className="topbar">
@@ -22,6 +23,12 @@ export function Header(props: {
         </span>
       )}
       {graph && <span>{t(lang, 'health', { score: projectHealth(graph) })}</span>}
+      {unreadable && (
+        <span className="unreadable-line">
+          <span aria-hidden="true">⚠ </span>
+          {unreadable}
+        </span>
+      )}
       <span className={`status ${status}`} role="status">
         {t(lang, status)}
       </span>

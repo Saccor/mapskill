@@ -1,7 +1,11 @@
 // packages/cli/src/hooks/run.ts
 import { hookRoot, isJsProject, readHookInput, type HookInput } from './input';
 import { logHookProblem } from './log';
+import { postToolUse } from './post-tool-use';
 import { preToolUse } from './pre-tool-use';
+import { sessionStart } from './session-start';
+import { stop } from './stop';
+import { userPromptSubmit } from './user-prompt-submit';
 
 export interface HookResult {
   exitCode: number;
@@ -34,9 +38,12 @@ const DEADLINE_MS: Record<HookEvent, number> = {
 
 const isEvent = (e: string): e is HookEvent => (HOOK_EVENTS as readonly string[]).includes(e);
 
-/** Handlers are filled in by Task 6; tests may pass their own. */
 const builtIn: Partial<Record<HookEvent, HookHandler>> = {
+  'session-start': sessionStart,
+  'user-prompt-submit': userPromptSubmit,
   'pre-tool-use': preToolUse,
+  'post-tool-use': postToolUse,
+  stop,
 };
 
 /**

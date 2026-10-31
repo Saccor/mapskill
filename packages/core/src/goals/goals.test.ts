@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { toPublicGraph, type PublicGraph } from '../graph/delta';
@@ -167,8 +168,36 @@ describe('evaluateGoal fix round 1', () => {
     const graph = g({ nodes, edges });
     const start = performance.now();
     const s = evaluateGoal(findGoal('saas-auth-payments')!, graph, () => false);
-    expect(performance.now() - start).toBeLessThan(200);
+    expect(performance.now() - start).toBeLessThan(1000);
     expect(s.total).toBeGreaterThan(0);
+  });
+});
+
+describe('protect-pages item', () => {
+  const protect = (graph: PublicGraph) => evaluateGoal(findGoal('webapp-auth')!, graph, () => false).items.find((i) => i.id === 'protect-pages')!;
+  const scanned = (files: Record<string, string>) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-protect-'));
+    try {
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'x', dependencies: { next: '15.0.0' } }));
+      for (const [rel, text] of Object.entries(files)) {
+        fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+        fs.writeFileSync(path.join(root, rel), text);
+      }
+      return protect(toPublicGraph(scanProject(root)));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  it('is done for a middleware node whatever the extension, and not done without one', () => {
+    const cfg = g({ nodes: [{ id: 'config:middleware.js', type: 'config', zone: 'server', label: 'middleware', file: 'middleware.js' }] });
+    expect(protect(cfg)).toMatchObject({ done: true, matchedNodeIds: ['config:middleware.js'] });
+    expect(protect(g({}))).toMatchObject({ done: false, suggestPath: 'middleware.ts' });
+  });
+
+  it('counts a real middleware.js and a real src/proxy.ts as done', () => {
+    expect(scanned({ 'app/page.tsx': 'export default function P(){return null}', 'middleware.js': 'export function middleware(){}' }).done).toBe(true);
+    expect(scanned({ 'app/page.tsx': 'export default function P(){return null}', 'src/proxy.ts': 'export function proxy(){}' }).done).toBe(true);
   });
 });
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { ensureMapskillDir, mapskillPath, readJson, writeJsonAtomic } from './paths';
 
-export const DAEMON_VERSION = '0.2.0';
+export const DAEMON_VERSION = '0.3.0';
 
 /** Contents of .mapskill/daemon.json: how other processes find the running daemon. */
 export interface DaemonInfo {

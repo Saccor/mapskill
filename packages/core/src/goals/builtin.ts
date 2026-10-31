@@ -108,7 +108,7 @@ export const BUILTIN_GOALS: GoalTemplate[] = [
         title: { en: 'Guard for private pages', sv: 'Skydd för privata sidor' },
         why: { en: 'Stops people who are not logged in from opening private pages.', sv: 'Hindrar den som inte är inloggad från att öppna privata sidor.' },
         nodeType: 'config',
-        check: { any: [{ fileExists: 'middleware.ts' }, { fileExists: 'src/middleware.ts' }, { fileExists: 'proxy.ts' }, { fileExists: 'src/proxy.ts' }] },
+        check: { anyNode: { type: 'config', nameMatches: '^middleware$' } },
         suggest: { path: 'middleware.ts' },
       },
       {

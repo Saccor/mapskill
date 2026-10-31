@@ -11,7 +11,7 @@ Tidsuppskattning: en erfaren fullstack-utvecklare, ±50 %.
 | M1 | Analysmotor och `mapskill scan` | 2 | [2026-10-30-m1-analysis-engine.md](2026-10-30-m1-analysis-engine.md) | Parser, modulupplösning, Next.js-adapter, graf, alla analyser, CLI som skriver ut karta och fynd |
 | M2 | Inkrementell graf och daemon (klar) | 1,5 | [2026-10-30-m2-daemon.md](2026-10-30-m2-daemon.md) | `applyFileChanges`, filvakt, cache, HTTP + WebSocket med token, `daemon.json`, självavstängning |
 | M3 | Claude Code-plugin (klar) | 1,5 | [2026-10-31-m3-plugin.md](2026-10-31-m3-plugin.md) | Hooks (SessionStart, UserPromptSubmit, PreToolUse-lås, PostToolUse, Stop), MCP-server med fem verktyg, skill |
-| M4 | Kartvy | 3 | skrivs nu | React Flow + ELK med stabil layout, sidopanel, aktivitetsrad, pulserande noder, knapparna Lås och Fråga, förfrågningskö |
+| M4 | Kartvy | 3 | [2026-10-31-m4-map-view.md](2026-10-31-m4-map-view.md) | React Flow + ELK med stabil layout, sidopanel, aktivitetsrad, pulserande noder, knapparna Lås och Fråga, förfrågningskö |
 | M5 | Mål och spöknoder | 1,5 | skrivs efter M4 | YAML-mallar, fyra inbyggda mål, utvärdering, spöknoder, Bygg-knappen |
 | M6 | Härdning och testanvändare | 1,5 | skrivs efter M5 | npm-paketering, plugin-marknadsplatsfil, prestandatest med 500 filer, 3 till 5 testanvändare, mätning av återkomst vecka två |
 

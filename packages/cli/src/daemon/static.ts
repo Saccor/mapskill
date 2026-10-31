@@ -43,7 +43,8 @@ export function serveStatic(uiDir: string | null, req: http.IncomingMessage, res
   }
   const wantsPage = path.extname(decoded) === '';
   const file = path.resolve(uiDir, '.' + (wantsPage ? '/index.html' : decoded));
-  const rootWithSep = path.resolve(uiDir) + path.sep;
+  const base = path.resolve(uiDir);
+  const rootWithSep = base.endsWith(path.sep) ? base : base + path.sep;
   if (!file.startsWith(rootWithSep)) return plain(404, 'not found\n');
   let body: Buffer;
   try {

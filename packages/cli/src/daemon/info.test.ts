@@ -20,13 +20,22 @@ const lockFile = (root: string): string => path.join(root, '.mapskill', 'daemon.
 describe('daemon.json', () => {
   it('round-trips and is only removed by its owner', () => {
     const root = tmpProject({});
-    const info: DaemonInfo = { pid: 4242, port: 1234, token: 't', version: DAEMON_VERSION, root, startedAt: 1 };
+    const info: DaemonInfo = { pid: 4242, port: 1234, token: 'abcd', version: DAEMON_VERSION, root, startedAt: 1 };
     writeDaemonInfo(root, info);
     expect(readDaemonInfo(root)).toEqual(info);
     removeDaemonInfo(root, 1);
     expect(readDaemonInfo(root)).toEqual(info);
     removeDaemonInfo(root, 4242);
     expect(readDaemonInfo(root)).toBeNull();
+  });
+
+  it('rejects a daemon.json with an invalid token, port or pid', () => {
+    const base = { pid: 4242, port: 1234, token: 'abcd', version: DAEMON_VERSION, startedAt: 1 };
+    const bad = [{ token: 'zz!' }, { token: '' }, { port: 0 }, { port: 70000 }, { port: 1.5 }, { pid: 0 }, { pid: -3 }, { pid: 1.5 }];
+    for (const over of bad) {
+      const root = tmpProject({ '.mapskill/daemon.json': JSON.stringify({ ...base, root: 'r', ...over }) });
+      expect(readDaemonInfo(root), JSON.stringify(over)).toBeNull();
+    }
   });
 
   it('treats a broken file as missing', () => {

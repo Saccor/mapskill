@@ -13,7 +13,7 @@ import { postToolUse } from './post-tool-use';
 import { runHook } from './run';
 import type { HookContext } from './types';
 import { stop } from './stop';
-import { userPromptSubmit } from './user-prompt-submit';
+import { formatRequests, userPromptSubmit } from './user-prompt-submit';
 import { sessionContext } from './session-start';
 import { formatStopReason } from './stop';
 
@@ -145,6 +145,14 @@ describe('formatStopReason', () => {
     expect(text).toContain('1. Problem 1\n   What to do: Fix 1');
     expect(text).toContain('(2 more not shown');
     expect(formatStopReason({ ...answer, total: 1, findings: [f(1)] })).toContain('found 1 new problem in');
+  });
+});
+
+describe('formatRequests', () => {
+  it('indents continuation lines so the numbered list stays intact', () => {
+    const r = (id: string, text: string) => ({ id, kind: 'custom' as const, text, createdAt: 1, status: 'pending' as const });
+    const text = formatRequests([r('a', 'first\nsecond\r\nthird'), r('b', 'other')]);
+    expect(text).toContain('1. first\n   second\n   third\n2. other');
   });
 });
 

@@ -56,6 +56,9 @@ export async function pingDaemon(info: DaemonInfo, timeoutMs = 1500): Promise<Da
   }
 }
 
+/** A startedAt further ahead than this is not believable (clock skew or a forged file). */
+const FUTURE_START_SLACK_MS = 5000;
+
 /** The daemon from daemon.json, if its process lives and it answers (or started less than a minute ago). */
 export async function liveDaemon(root: string): Promise<DaemonInfo | null> {
   const info = readDaemonInfo(root);
@@ -70,7 +73,8 @@ export async function liveDaemon(root: string): Promise<DaemonInfo | null> {
     return null;
   }
   if (await pingDaemon(info)) return info;
-  return Date.now() - info.startedAt < STARTUP_GRACE_MS ? info : null;
+  const age = Date.now() - info.startedAt;
+  return age > -FUTURE_START_SLACK_MS && age < STARTUP_GRACE_MS ? info : null;
 }
 
 let selfEntry: string | undefined;

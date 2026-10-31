@@ -18,7 +18,11 @@ const LOCK_FILE = 'daemon.lock';
 
 export function readDaemonInfo(root: string): DaemonInfo | null {
   const info = readJson<Partial<DaemonInfo>>(mapskillPath(root, INFO_FILE));
-  if (!info || typeof info.pid !== 'number' || typeof info.port !== 'number' || typeof info.token !== 'string') return null;
+  if (!info) return null;
+  const { pid, port, token } = info;
+  if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return null;
+  if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+  if (typeof token !== 'string' || !/^[0-9a-f]+$/.test(token)) return null;
   return info as DaemonInfo;
 }
 

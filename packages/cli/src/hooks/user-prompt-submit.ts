@@ -7,7 +7,7 @@ import { ALLOW, timeLeft, type HookHandler } from './types';
 export function formatRequests(requests: MapRequest[]): string {
   return [
     'The user sent these requests from the Mapskill map. Handle them as part of this turn, in order:',
-    ...requests.map((r, i) => `${i + 1}. ${r.text}`),
+    ...requests.map((r, i) => `${i + 1}. ${r.text.replace(/\r?\n/g, '\n   ')}`),
   ].join('\n');
 }
 

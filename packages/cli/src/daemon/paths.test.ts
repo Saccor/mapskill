@@ -47,7 +47,7 @@ describe('writeJsonAtomic', () => {
 describe('file permissions (POSIX)', () => {
   it.skipIf(process.platform === 'win32')('keeps the token private: daemon.json 0600 in a 0700 .mapskill', () => {
     const root = tmpProject({});
-    writeDaemonInfo(root, { pid: 1, port: 2, token: 't', version: 'v', root, startedAt: 0 });
+    writeDaemonInfo(root, { pid: 1, port: 2, token: 'ab', version: 'v', root, startedAt: 0 });
     expect(fs.statSync(path.join(root, '.mapskill')).mode & 0o777).toBe(0o700);
     expect(fs.statSync(path.join(root, '.mapskill', 'daemon.json')).mode & 0o777).toBe(0o600);
     const file = path.join(root, 'x.json');

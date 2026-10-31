@@ -50,7 +50,7 @@ describe('ensureDaemon', () => {
   it('replaces a daemon.json whose pid is dead', async () => {
     const root = newProject();
     const dead = deadPid();
-    writeDaemonInfo(root, { pid: dead, port: 1, token: 'x', version: DAEMON_VERSION, root, startedAt: Date.now() });
+    writeDaemonInfo(root, { pid: dead, port: 1, token: 'ab', version: DAEMON_VERSION, root, startedAt: Date.now() });
     const info = await ensureDaemon(root, { timeoutMs: 15_000 });
     expect(info).not.toBeNull();
     expect(info!.pid).not.toBe(dead);
@@ -63,6 +63,23 @@ describe('ensureDaemon', () => {
     expect(a).not.toBeNull();
     expect(b?.pid).toBe(a!.pid);
   }, 30_000);
+});
+
+describe('liveDaemon start time', () => {
+  const entry = (root: string, startedAt: number) =>
+    writeDaemonInfo(root, { pid: process.pid, port: 1, token: 'ab', version: DAEMON_VERSION, root, startedAt });
+
+  it('trusts a recent start that does not answer yet', async () => {
+    const root = newProject();
+    entry(root, Date.now());
+    expect(await liveDaemon(root)).not.toBeNull();
+  });
+
+  it('does not trust a start time in the future', async () => {
+    const root = newProject();
+    entry(root, Date.now() + 60_000);
+    expect(await liveDaemon(root)).toBeNull();
+  });
 });
 
 describe('ensureDaemon fail-open', () => {

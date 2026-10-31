@@ -10,7 +10,15 @@ export const ZONE_BOX = { padding: 16, header: 36, gap: 24, columnGap: 40 } as c
 
 const byId = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
-/** Keeps every part's saved slot; new parts take the lowest free slots of their zone, in id order. */
+/** Saved slots at or above this are treated as missing (a broken layout file must not stretch a zone). */
+export const MAX_SLOT = 10_000;
+
+/**
+ * Keeps every part's saved slot; new parts take the lowest free slots of their zone, in id order.
+ * In core every node id starts with its type and the zone follows from the type, so an id never changes zone:
+ * a part that moves zone is always a new id. That is why the lowest-id clash rule cannot displace a part
+ * on a normal zone change.
+ */
 export function assignSlots(nodes: { id: string; zone: Zone }[], saved: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {};
   const zones = new Map<Zone, { id: string; zone: Zone }[]>();
@@ -21,7 +29,7 @@ export function assignSlots(nodes: { id: string; zone: Zone }[], saved: Record<s
     const fresh: string[] = [];
     for (const { id } of sorted) {
       const slot = saved[id];
-      if (slot !== undefined && !taken.has(slot)) {
+      if (slot !== undefined && slot < MAX_SLOT && !taken.has(slot)) {
         taken.add(slot);
         out[id] = slot;
       } else fresh.push(id);

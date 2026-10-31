@@ -31,7 +31,7 @@ export function partFlags(
 
 /** When the next pulse ends (to re-render then), or null when nothing pulses. */
 export function nextPulseEnd(pulseUntil: Record<string, number>, now: number): number | null {
-  const future = Object.values(pulseUntil).filter((t) => t > now);
+  const future = Object.values(pulseUntil).filter((until) => until > now);
   return future.length ? Math.min(...future) : null;
 }
 
@@ -58,6 +58,7 @@ export function projectHealth(graph: PublicGraph): number {
 }
 
 export function activityLine(a: Activity, graph: PublicGraph | null, lang: Lang): string {
+  if (a.files.length === 0) return t(lang, 'activityNone');
   const name = (file: string): string => graph?.nodes.find((n) => n.file === file)?.label ?? file.split('/').pop() ?? file;
   const names = [...new Set(a.files.map((f) => name(f.path)))];
   const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ` +${names.length - 3}` : '');

@@ -52,4 +52,8 @@ describe('view model', () => {
     const many = activityLine({ at: 0, files: ['a', 'b', 'c', 'd', 'e'].map((p) => ({ path: `${p}.ts`, by: 'watcher' as const })) }, g, 'sv');
     expect(many).toBe('Någon ändrade a.ts, b.ts, c.ts +2');
   });
+
+  it('says there are no changes when the file list is empty', () => {
+    expect(activityLine({ at: 0, files: [] }, g, 'en')).toBe('No changes yet.');
+  });
 });

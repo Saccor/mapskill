@@ -1,6 +1,6 @@
 import type { Zone } from '@mapskill/core/client';
 import { describe, expect, it } from 'vitest';
-import { assignSlots, CARD, layoutMap, ZONE_BOX } from './layout';
+import { assignSlots, CARD, layoutMap, MAX_SLOT, ZONE_BOX } from './layout';
 
 const n = (id: string, zone: Zone = 'shared') => ({ id, zone });
 
@@ -19,6 +19,23 @@ describe('assignSlots', () => {
   it('numbers each zone on its own and resolves clashes by id', () => {
     expect(assignSlots([n('p', 'pages'), n('h', 'shared')], {})).toEqual({ p: 0, h: 0 });
     expect(assignSlots([n('a'), n('b')], { a: 0, b: 0 })).toEqual({ a: 0, b: 1 });
+  });
+
+  it('keeps slots in the target zone when a part changes id and zone', () => {
+    const saved = { 'helper:lib/x.ts#X': 0, 'component:a': 0, 'component:b': 1 };
+    const after = assignSlots(
+      [n('component:lib/x.ts#X', 'blocks'), n('component:a', 'blocks'), n('component:b', 'blocks')],
+      saved,
+    );
+    expect(after['component:a']).toBe(0);
+    expect(after['component:b']).toBe(1);
+    expect(after['component:lib/x.ts#X']).toBe(2);
+  });
+
+  it('treats an absurd saved slot as missing', () => {
+    expect(MAX_SLOT).toBe(10_000);
+    expect(assignSlots([n('a'), n('b')], { a: 10000, b: 5 })).toEqual({ a: 0, b: 5 });
+    expect(assignSlots([n('a')], { a: 9999 })).toEqual({ a: 9999 });
   });
 });
 

@@ -1,5 +1,4 @@
 import { randomBytes } from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 import {
   applyFileChanges,
@@ -10,6 +9,7 @@ import {
   type Project,
   type PublicGraph,
 } from '@mapskill/core';
+import { canonicalRoot, toProjectRel } from '../project-path';
 import { readFactsCache, writeFactsCache } from './cache';
 import { DAEMON_VERSION, readDaemonInfo, removeDaemonInfo, writeDaemonInfo, type DaemonInfo } from './info';
 import { ensureGitignore, ensureMapskillDir } from './paths';
@@ -17,6 +17,8 @@ import { ChangeQueue, type ChangeBatch } from './queue';
 import { startServer } from './server';
 import { TurnTracker } from './turns';
 import { watchProject, type ProjectWatcher } from './watcher';
+
+export { toProjectRel } from '../project-path';
 
 export interface DaemonOptions {
   /** Stop after this long without connected clients or requests. Default 30 minutes. */
@@ -42,29 +44,8 @@ export interface DaemonHandle {
   project(): Project | undefined;
 }
 
-/** The on-disk spelling of `p` (letter case, junctions and symlinks resolved), or null when it does not exist. */
-function realPath(p: string): string | null {
-  try {
-    return fs.realpathSync.native(p);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Project-relative path with '/' separators, or null when `file` lies outside the project (or is the root itself).
- * `root` must be canonical (see startDaemon). An existing file is resolved to its on-disk spelling first, so a hook
- * path with other letter case on Windows still maps to the path the graph uses. A deleted file maps as given.
- */
-export function toProjectRel(root: string, file: string): string | null {
-  const abs = path.resolve(root, file);
-  const rel = path.relative(root, realPath(abs) ?? abs).split(path.sep).join('/');
-  if (rel === '' || rel === '..' || rel.startsWith('../') || path.isAbsolute(rel)) return null;
-  return rel;
-}
-
 export async function startDaemon(rootArg: string, options: DaemonOptions = {}): Promise<DaemonHandle> {
-  const root = realPath(path.resolve(rootArg)) ?? path.resolve(rootArg);
+  const root = canonicalRoot(rootArg);
   const log = options.log ?? (() => {});
   const idleMs = options.idleMs ?? 30 * 60_000;
   ensureMapskillDir(root);

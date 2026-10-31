@@ -22,7 +22,11 @@ export const MAX_SLOT = 10_000;
 export function assignSlots(nodes: { id: string; zone: Zone }[], saved: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {};
   const zones = new Map<Zone, { id: string; zone: Zone }[]>();
-  for (const node of nodes) zones.set(node.zone, [...(zones.get(node.zone) ?? []), node]);
+  for (const node of nodes) {
+    const list = zones.get(node.zone);
+    if (list) list.push(node);
+    else zones.set(node.zone, [node]);
+  }
   for (const list of zones.values()) {
     const sorted = [...list].sort(byId);
     const taken = new Set<number>();
@@ -64,7 +68,11 @@ export function layoutMap(nodes: { id: string; zone: Zone }[], slots: Record<str
   const positions: Record<string, { x: number; y: number }> = {};
   const zones: ZoneBox[] = [];
   const byZone = new Map<Zone, string[]>();
-  for (const node of nodes) byZone.set(node.zone, [...(byZone.get(node.zone) ?? []), node.id]);
+  for (const node of nodes) {
+    const ids = byZone.get(node.zone);
+    if (ids) ids.push(node.id);
+    else byZone.set(node.zone, [node.id]);
+  }
   let columnX = 0;
   for (const column of ZONE_COLUMNS) {
     let y = 0;

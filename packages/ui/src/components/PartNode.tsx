@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import type { MapNode } from '@mapskill/core/client';
 import { NODE_ICON } from '../icons';
@@ -17,7 +18,7 @@ export type PartData = {
   onSelect: (id: string) => void;
 };
 
-export function PartNode({ data }: NodeProps<Node<PartData>>) {
+function PartNodeView({ data }: NodeProps<Node<PartData>>) {
   const cls = ['part', data.pulsing && 'pulsing', data.touched && 'touched', data.selected && 'selected', data.findingCount > 0 && 'has-findings']
     .filter(Boolean)
     .join(' ');
@@ -36,3 +37,5 @@ export function PartNode({ data }: NodeProps<Node<PartData>>) {
     </>
   );
 }
+
+export const PartNode = memo(PartNodeView);

@@ -1,6 +1,6 @@
 import { Background, Controls, ReactFlow, type AriaLabelConfig, type Edge, type Node } from '@xyflow/react';
 import { ZONE_LABELS, type EdgeKind, type PublicGraph, type Zone } from '@mapskill/core/client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NODE_TYPE_TEXT, t, type Lang } from '../i18n';
 import { layoutMap } from '../layout';
 import type { MapState } from '../reducer';
@@ -48,6 +48,21 @@ export interface MapViewProps {
   lang: Lang;
 }
 
+/** A part before the cheap per-render flags are added: everything that only changes with the graph, slots, folds or language. */
+interface PartSkeleton {
+  node: Node;
+  data: Omit<PartData, 'pulsing' | 'touched' | 'locked' | 'selected' | 'ariaLabel'>;
+  /** Label pieces before and after the lock text, so the lock can be added without rebuilding the rest. */
+  ariaBefore: string;
+  ariaAfter: string;
+}
+
+interface Skeleton {
+  /** Zone headers and part skeletons in tab order. */
+  items: ({ kind: 'zone'; node: Node } | { kind: 'part'; part: PartSkeleton })[];
+  shown: Set<string>;
+}
+
 export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdges, collapsed, onToggleZone, lang }: MapViewProps) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -59,86 +74,119 @@ export function MapView({ graph, state, slots, selectedId, onSelect, showAllEdge
   useEffect(() => setNow(Date.now()), [state.pulseUntil]);
 
   const labels = useMemo(() => ariaLabels(lang), [lang]);
-  const { nodes, edges } = useMemo(() => {
+
+  // The expensive part: positions and texts. Runs only when the graph, the slots, the folds or the language change.
+  const skeleton = useMemo<Skeleton>(() => {
     const layout = layoutMap(graph.nodes, slots, collapsed);
-    const flags = partFlags(graph, state, now);
     const findings = findingsByNode(graph);
-    const out: Node[] = layout.zones.map((z) => ({
-      id: `zone:${z.zone}`,
-      type: 'zone',
-      position: { x: z.x, y: z.y },
-      style: { width: z.width, height: z.height },
-      selectable: false,
-      draggable: false,
-      focusable: false,
-      data: {
-        zone: z.zone,
-        title: ZONE_LABELS[z.zone][lang],
-        countText: t(lang, 'zoneCount', { n: z.count }),
-        collapsed: z.collapsed,
-        onToggle: onToggleZone,
-      } satisfies ZoneData,
-    }));
     const bySlot = (a: { id: string }, b: { id: string }) => (slots[a.id] ?? 0) - (slots[b.id] ?? 0);
-    const parts: typeof graph.nodes = [];
-    const ordered: Node[] = [];
+    const unreadable = new Set(graph.unreadableFiles);
+    const items: Skeleton['items'] = [];
+    const shown = new Set<string>();
     // Zone header, then that zone's parts: the tab order follows the map (parents still precede children).
-    for (const zoneNode of out) {
-      ordered.push(zoneNode);
-      const zone = (zoneNode.data as ZoneData).zone;
-      const inZone = graph.nodes.filter((n) => n.zone === zone && layout.positions[n.id]).sort(bySlot);
+    for (const z of layout.zones) {
+      items.push({
+        kind: 'zone',
+        node: {
+          id: `zone:${z.zone}`,
+          type: 'zone',
+          position: { x: z.x, y: z.y },
+          style: { width: z.width, height: z.height },
+          selectable: false,
+          draggable: false,
+          focusable: false,
+          data: {
+            zone: z.zone,
+            title: ZONE_LABELS[z.zone][lang],
+            countText: t(lang, 'zoneCount', { n: z.count }),
+            collapsed: z.collapsed,
+            onToggle: onToggleZone,
+          } satisfies ZoneData,
+        },
+      });
+      const inZone = graph.nodes.filter((n) => n.zone === z.zone && layout.positions[n.id]).sort(bySlot);
       for (const n of inZone) {
-        parts.push(n);
-        const f = flags[n.id];
+        shown.add(n.id);
         const count = findings[n.id]?.length ?? 0;
         const health = graph.health[n.id] ?? 10;
-        const typeName = NODE_TYPE_TEXT[n.type].name[lang];
-        const aria = [
+        const isUnreadable = n.file !== undefined && unreadable.has(n.file);
+        const ariaBefore = [
           n.label,
-          typeName,
+          NODE_TYPE_TEXT[n.type].name[lang],
           health < 10 ? t(lang, 'health', { score: health }).toLowerCase() : '',
           count > 0 ? `${count} ${t(lang, 'findings').toLowerCase()}` : '',
-          f.locked ? t(lang, 'locked') : '',
-          f.unreadable ? t(lang, 'unreadableShort') : '',
         ]
           .filter(Boolean)
           .join(', ');
-        ordered.push({
-          id: n.id,
-          type: 'part',
-          parentId: `zone:${n.zone}`,
-          extent: 'parent',
-          position: layout.positions[n.id],
-          draggable: false,
-          data: {
-            node: n,
-            health,
-            findingCount: count,
-            pulsing: f.pulsing,
-            touched: f.touched,
-            locked: f.locked,
-            unreadable: f.unreadable,
-            selected: n.id === selectedId,
-            ariaLabel: aria,
-            lockedText: t(lang, 'locked'),
-            unreadableText: t(lang, 'unreadableShort'),
-            onSelect: (id: string) => onSelect(id),
-          } satisfies PartData,
+        items.push({
+          kind: 'part',
+          part: {
+            ariaBefore,
+            ariaAfter: isUnreadable ? t(lang, 'unreadableShort') : '',
+            data: {
+              node: n,
+              health,
+              findingCount: count,
+              unreadable: isUnreadable,
+              lockedText: t(lang, 'locked'),
+              unreadableText: t(lang, 'unreadableShort'),
+              onSelect,
+            },
+            node: {
+              id: n.id,
+              type: 'part',
+              parentId: `zone:${n.zone}`,
+              extent: 'parent',
+              position: layout.positions[n.id],
+              draggable: false,
+              data: {},
+            },
+          },
         });
       }
     }
-    const shown = new Set(parts.map((p) => p.id));
-    const flowEdges: Edge[] = visibleEdges(graph, selectedId, showAllEdges)
-      .filter((e) => shown.has(e.from) && shown.has(e.to))
-      .map((e) => ({
-        id: e.id,
-        source: e.from,
-        target: e.to,
-        label: EDGE_TEXT[e.kind][lang],
-        animated: e.from === selectedId || e.to === selectedId,
-      }));
-    return { nodes: ordered, edges: flowEdges };
-  }, [graph, slots, collapsed, state, now, selectedId, showAllEdges, lang, onSelect, onToggleZone]);
+    return { items, shown };
+  }, [graph, slots, collapsed, lang, onSelect, onToggleZone]);
+
+  // The cheap part: pulse, touched, lock and selection flags. A part whose flags did not change keeps its node object,
+  // so React (and React Flow) skip it.
+  const cache = useRef<{ skeleton: Skeleton; nodes: Map<string, { key: string; node: Node }> } | null>(null);
+  const nodes = useMemo(() => {
+    if (cache.current?.skeleton !== skeleton) cache.current = { skeleton, nodes: new Map() };
+    const reuse = cache.current.nodes;
+    const flags = partFlags(graph, state, now);
+    return skeleton.items.map((item) => {
+      if (item.kind === 'zone') return item.node;
+      const { part } = item;
+      const id = part.node.id;
+      const f = flags[id];
+      const selected = id === selectedId;
+      const key = `${f.pulsing ? 1 : 0}${f.touched ? 1 : 0}${f.locked ? 1 : 0}${selected ? 1 : 0}`;
+      const hit = reuse.get(id);
+      if (hit && hit.key === key) return hit.node;
+      const ariaLabel = [part.ariaBefore, f.locked ? t(lang, 'locked') : '', part.ariaAfter].filter(Boolean).join(', ');
+      const node: Node = {
+        ...part.node,
+        data: { ...part.data, pulsing: f.pulsing, touched: f.touched, locked: f.locked, selected, ariaLabel } satisfies PartData,
+      };
+      reuse.set(id, { key, node });
+      return node;
+    });
+  }, [skeleton, graph, state, now, selectedId, lang]);
+
+  const edges = useMemo<Edge[]>(
+    () =>
+      visibleEdges(graph, selectedId, showAllEdges)
+        .filter((e) => skeleton.shown.has(e.from) && skeleton.shown.has(e.to))
+        .map((e) => ({
+          id: e.id,
+          source: e.from,
+          target: e.to,
+          label: EDGE_TEXT[e.kind][lang],
+          animated: e.from === selectedId || e.to === selectedId,
+        })),
+    [graph, skeleton, selectedId, showAllEdges, lang],
+  );
 
   return (
     <ReactFlow

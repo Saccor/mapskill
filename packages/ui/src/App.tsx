@@ -9,8 +9,8 @@ import { MapView } from './components/MapView';
 import { SidePanel } from './components/SidePanel';
 import { useMapConnection } from './connection';
 import { errorText } from './errors';
-import { ghostItem, withGhosts } from './goals';
-import { pickLang, STRINGS, type Lang } from './i18n';
+import { ghostItem, goalLine, withGhosts } from './goals';
+import { pickLang, STRINGS, t, type Lang } from './i18n';
 import { useSlots } from './slots';
 import { isTextEntry } from './view-model';
 
@@ -38,6 +38,8 @@ function MapApp({ token }: { token: string }) {
   const [showAllEdges, setShowAllEdges] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<Zone>>(() => new Set<Zone>(['tests']));
   const [goalOpen, setGoalOpen] = useState(false);
+  const goalToggle = useRef<HTMLButtonElement>(null);
+  const goalCall = useRef(0);
   const [error, setError] = useState<{ text: string; at: number } | null>(null);
   const announceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [announcement, setAnnouncement] = useState('');
@@ -60,17 +62,29 @@ function MapApp({ token }: { token: string }) {
   }, [error]);
 
   const hasNode = !!(shown && selectedId && shown.nodes.some((n) => n.id === selectedId));
+  const closeGoal = useCallback(() => {
+    setGoalOpen(false);
+    goalToggle.current?.focus();
+  }, []);
+  // A goal that goes away takes its panel with it.
+  const hasGoal = state.goal !== null;
   useEffect(() => {
-    if (!hasNode) return;
+    if (!hasGoal) setGoalOpen(false);
+  }, [hasGoal]);
+  const goalPanelOpen = goalOpen && hasGoal;
+  useEffect(() => {
+    if (!hasNode && !goalPanelOpen) return;
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return;
       const target = e.target;
       if (target instanceof HTMLElement && isTextEntry(target)) return;
-      setSelectedId(null);
+      // The goal panel goes first; a second Escape then deselects the part.
+      if (goalPanelOpen) closeGoal();
+      else setSelectedId(null);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [hasNode]);
+  }, [hasNode, goalPanelOpen, closeGoal]);
   const lastSelected = useRef<string | null>(null);
   // The selected part vanished from the map (file deleted, project rescanned): nothing is selected any more.
   useEffect(() => {
@@ -113,15 +127,25 @@ function MapApp({ token }: { token: string }) {
   }, []);
   const select = useCallback((id: string | null) => setSelectedId(id), []);
   const chooseGoal = (id: string | null): void => {
+    // Only the answer to the latest choice counts; the WebSocket push keeps the status current either way.
+    const call = ++goalCall.current;
     api.setGoal(id).then(
-      (answer) => dispatch({ type: 'goal', answer }),
-      (err: unknown) => showError(errorText(err, lang)),
+      (answer) => {
+        if (call !== goalCall.current) return;
+        dispatch({ type: 'goal', answer });
+        announce(answer.status ? goalLine(answer.status, lang) : t(lang, 'noGoal'));
+      },
+      (err: unknown) => {
+        if (call === goalCall.current) showError(errorText(err, lang));
+      },
     );
   };
 
   const graph = state.graph;
   const node = shown && selectedId ? shown.nodes.find((n) => n.id === selectedId) ?? null : null;
   const ghost = node?.planned && selectedId ? ghostItem(state.goal, selectedId) : null;
+  // A planned node without its goal item has nothing to show: it must never fall through to the real-part panel.
+  const showPanel = !!(graph && node && (!node.planned || ghost));
 
   return (
     <div className="app">
@@ -144,9 +168,10 @@ function MapApp({ token }: { token: string }) {
         onChooseGoal={chooseGoal}
         goalOpen={goalOpen}
         onToggleGoal={() => setGoalOpen((v) => !v)}
+        goalToggleRef={goalToggle}
       />
-      {state.goal && goalOpen && <GoalPanel goal={state.goal} lang={lang} onSelect={select} onClose={() => setGoalOpen(false)} />}
-      <div className={`main${node ? '' : ' no-panel'}`}>
+      {state.goal && goalOpen && <GoalPanel goal={state.goal} lang={lang} onSelect={select} />}
+      <div className={`main${showPanel ? '' : ' no-panel'}`}>
         <div className="map">
           {shown && slots ? (
             <MapView graph={shown} state={state} slots={slots} selectedId={selectedId} onSelect={select} showAllEdges={showAllEdges} collapsed={collapsed} onToggleZone={toggleZone} lang={lang} />
@@ -154,7 +179,7 @@ function MapApp({ token }: { token: string }) {
             <p className="muted center">{STRINGS[lang].connecting}</p>
           )}
         </div>
-        {graph && node && (
+        {graph && node && showPanel && (
           <div className="panel-wrap">
             {ghost ? (
               <GhostPanel key={node.id} graph={graph} item={ghost} nodeId={node.id} lang={lang} api={api} onSelect={select} onError={showError} onDone={announce} />

@@ -1,20 +1,17 @@
 import type { GoalStatus } from '@mapskill/core/client';
+import { useEffect, useRef } from 'react';
 import { GHOST_PREFIX, goalLine } from '../goals';
 import { t, type Lang } from '../i18n';
 
-export function GoalPanel({ goal, lang, onSelect, onClose }: { goal: GoalStatus; lang: Lang; onSelect: (id: string) => void; onClose: () => void }) {
+/** The goal checklist. Escape closes it from anywhere (handled by the page); focus lands on the heading when it opens. */
+export function GoalPanel({ goal, lang, onSelect }: { goal: GoalStatus; lang: Lang; onSelect: (id: string) => void }) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus(), []);
   return (
-    <section
-      className="goal-panel"
-      aria-label={goalLine(goal, lang)}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          e.stopPropagation();
-          onClose();
-        }
-      }}
-    >
-      <h2>{goalLine(goal, lang)}</h2>
+    <section className="goal-panel" aria-label={goalLine(goal, lang)}>
+      <h2 ref={heading} tabIndex={-1}>
+        {goalLine(goal, lang)}
+      </h2>
       <ul>
         {goal.items.map((i) => (
           <li key={i.id} className={i.done ? 'done' : 'missing'}>

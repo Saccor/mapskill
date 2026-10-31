@@ -22,6 +22,8 @@ export interface SidePanelProps {
 
 export function SidePanel({ graph, node, locked, lang, api, onSelect, onError, onDone }: SidePanelProps) {
   const [copied, setCopied] = useState(false);
+  /** The request in flight ('ask' or a finding id): its button is disabled so a double click sends one request. */
+  const [busy, setBusy] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
@@ -36,6 +38,10 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError, o
     onError(t(lang, key, { error: errorText(err, lang) }));
   };
   const queued = (): void => onDone(t(lang, 'requestQueued'));
+  const request = (key: string, send: Promise<unknown>): void => {
+    setBusy(key);
+    send.then(queued, fail('actionFailed')).finally(() => setBusy(null));
+  };
   const failCopy = (err: unknown): void => {
     console.warn(err);
     onError(t(lang, 'copyFailed'));
@@ -81,7 +87,7 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError, o
             {locked ? `🔓 ${t(lang, 'unlock')}` : `🔒 ${t(lang, 'lock')}`}
           </button>
         )}
-        <button onClick={() => api.addRequest({ kind: 'explain', text: explainText(node, lang), nodeId: node.id }).then(queued, fail('actionFailed'))}>
+        <button disabled={busy === 'ask'} onClick={() => request('ask', api.addRequest({ kind: 'explain', text: explainText(node, lang), nodeId: node.id }))}>
           {t(lang, 'ask')}
         </button>
         <button
@@ -106,7 +112,7 @@ export function SidePanel({ graph, node, locked, lang, api, onSelect, onError, o
               <span aria-hidden="true">⚠ </span>
               {f.message[lang]} <span className="muted">({f.certainty === 'certain' ? (lang === 'sv' ? 'säkert' : 'certain') : lang === 'sv' ? 'troligt' : 'likely'})</span>
             </p>
-            <button onClick={() => api.addRequest({ kind: 'fix', text: fixText(f, lang), findingId: f.id, nodeId: node.id }).then(queued, fail('actionFailed'))}>
+            <button disabled={busy === f.id} onClick={() => request(f.id, api.addRequest({ kind: 'fix', text: fixText(f, lang), findingId: f.id, nodeId: node.id }))}>
               {t(lang, 'fixWithClaude')}
             </button>
             <button onClick={() => api.dismiss(f.id).then(() => onDone(t(lang, 'dismissedAnnounce')), fail('actionFailed'))}>{t(lang, 'itsFine')}</button>

@@ -20,6 +20,7 @@ export interface GhostPanelProps {
 /** The side panel of a missing goal item: what it is, where it could go, and the way to have Claude build it. */
 export function GhostPanel({ graph, item, nodeId, lang, api, onSelect, onError, onDone }: GhostPanelProps) {
   const [copied, setCopied] = useState(false);
+  const [building, setBuilding] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
@@ -50,15 +51,20 @@ export function GhostPanel({ graph, item, nodeId, lang, api, onSelect, onError, 
 
       <section className="actions">
         <button
-          onClick={() =>
-            api.addRequest({ kind: 'build', text: text(), nodeId }).then(
-              () => onDone(t(lang, 'buildQueued')),
-              (err: unknown) => {
-                console.warn(err);
-                onError(t(lang, 'actionFailed', { error: errorText(err, lang) }));
-              },
-            )
-          }
+          disabled={building}
+          onClick={() => {
+            setBuilding(true);
+            api
+              .addRequest({ kind: 'build', text: text(), nodeId })
+              .then(
+                () => onDone(t(lang, 'buildQueued')),
+                (err: unknown) => {
+                  console.warn(err);
+                  onError(t(lang, 'actionFailed', { error: errorText(err, lang) }));
+                },
+              )
+              .finally(() => setBuilding(false));
+          }}
         >
           {t(lang, 'build')}
         </button>

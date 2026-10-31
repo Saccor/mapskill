@@ -1,4 +1,5 @@
 import type { GoalStatus, GoalSummary, PublicGraph } from '@mapskill/core/client';
+import type { Ref } from 'react';
 import { goalLine } from '../goals';
 import { t, type Lang } from '../i18n';
 import type { MapState } from '../reducer';
@@ -16,6 +17,8 @@ export function Header(props: {
   onChooseGoal: (id: string | null) => void;
   goalOpen: boolean;
   onToggleGoal: () => void;
+  /** The show/hide button of the goal panel, so focus can return to it when the panel closes. */
+  goalToggleRef?: Ref<HTMLButtonElement>;
 }) {
   const { graph, status, lang } = props;
   const unreadable = graph ? unreadableLine(graph, lang) : null;
@@ -48,10 +51,13 @@ export function Header(props: {
       </label>
       {props.goal && (
         <>
-          <span className="goal-progress" aria-label={goalLine(props.goal, lang)}>
-            {props.goal.done}/{props.goal.total}
+          <span className="goal-progress">
+            <span className="sr-only">{goalLine(props.goal, lang)}</span>
+            <span aria-hidden="true">
+              {props.goal.done}/{props.goal.total}
+            </span>
           </span>
-          <button aria-expanded={props.goalOpen} onClick={props.onToggleGoal}>
+          <button ref={props.goalToggleRef} aria-expanded={props.goalOpen} onClick={props.onToggleGoal}>
             {t(lang, props.goalOpen ? 'hideGoal' : 'showGoal')}
           </button>
         </>

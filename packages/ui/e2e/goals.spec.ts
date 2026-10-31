@@ -62,3 +62,19 @@ test('building a missing part turns its ghost into a real part without moving th
   for (const [id, pos] of Object.entries(before)) expect(after[id], id).toEqual(pos);
   expect(after['page:app/pricing/page.tsx']).toEqual({ x: Math.round(ghostBox.x), y: Math.round(ghostBox.y) });
 });
+
+test('the goal panel takes focus when it opens, Escape closes it and returns focus to its button', async ({ page }) => {
+  await page.goto(app.url);
+  await page.getByLabel('Goal').selectOption('saas-auth-payments');
+  const toggle = page.getByRole('button', { name: 'Show goal' });
+  await toggle.click();
+  const heading = page.locator('.goal-panel h2');
+  await expect(heading).toBeFocused();
+  await expect(page.locator('.goal-progress .sr-only')).toContainText('Goal:');
+  await expect(page.locator('.goal-progress [aria-hidden="true"]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.goal-panel')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show goal' })).toBeFocused();
+  await page.getByLabel('Goal').selectOption('');
+  await expect(page.locator('.goal-progress')).toHaveCount(0);
+});

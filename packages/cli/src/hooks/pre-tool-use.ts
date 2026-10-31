@@ -23,8 +23,8 @@ function check(root: string, file: string): HookResult | null {
     exitCode: 2,
     stderr:
       `The user locked "${lock.label ?? lock.path}" in Mapskill, and ${rel} is part of it. Do not change it. ` +
-      `Ask the user first. To unlock, the user can run "mapskill unlock ${lock.path}" in the project folder, ` +
-      `or remove the entry from .mapskill/locks.json.\n`,
+      `Ask the user first. To unlock, the user can run: mapskill unlock "${path.join(root, lock.path)}" ` +
+      `— or remove the entry from .mapskill/locks.json.\n`,
   };
 }
 

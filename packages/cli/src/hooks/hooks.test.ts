@@ -56,7 +56,7 @@ describe('pre-tool-use', () => {
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain('"Betalning"');
     expect(result.stderr).toContain('lib/pay/charge.ts');
-    expect(result.stderr).toContain('mapskill unlock lib/pay/');
+    expect(result.stderr).toContain(`mapskill unlock "${path.join(root, 'lib/pay/')}"`);
     expect(result.stderr).toContain('Ask the user first.');
     expect(result.stderr).not.toContain('Mapskill map');
   });
@@ -80,6 +80,7 @@ describe('pre-tool-use', () => {
     const blocked = await runHook('pre-tool-use', { stdin: stdin(edit(root, 'apps/web/lib/a.ts')), env: env(root) });
     expect(blocked.exitCode).toBe(2);
     expect(blocked.stderr).toContain('lib/a.ts');
+    expect(blocked.stderr).toContain(`mapskill unlock "${path.join(subRoot, 'lib/a.ts')}"`);
     expect((await runHook('pre-tool-use', { stdin: stdin(edit(root, 'apps/web/lib/b.ts')), env: env(root) })).exitCode).toBe(0);
     // a broken locks.json in the sub-package fails closed too
     fs.writeFileSync(path.join(subRoot, '.mapskill', 'locks.json'), '{ broken');

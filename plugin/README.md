@@ -18,11 +18,11 @@ Pluginet gör fyra saker:
 
 ## Låsa filer
 
-Kommandot `mapskill` finns inte på din PATH när bara pluginet är installerat. Kör det från Mapskill-repot. Det fungerar var som helst: relativa sökvägar räknas från där du skrev kommandot, och projektet hittas utifrån sökvägen.
+Kommandot `mapskill` finns inte på din PATH när bara pluginet är installerat. Kör det från Mapskill-repot med en absolut sökväg, så fungerar det var som helst:
 
-    pnpm mapskill lock <sökväg>
+    pnpm mapskill lock <absolut sökväg>
 
-Eller kör den paketerade filen:
+Eller kör den paketerade filen inifrån projektmappen, då går en relativ sökväg bra:
 
     node <sökväg till repot>/plugin/dist/mapskill.mjs lock <sökväg>
 

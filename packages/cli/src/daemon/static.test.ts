@@ -35,7 +35,13 @@ describe('static map view', () => {
     expect(index.status).toBe(200);
     expect(index.headers.get('content-type')).toContain('text/html');
     expect(index.headers.get('cache-control')).toBe('no-cache');
-    expect(index.headers.get('content-security-policy')).toContain("default-src 'self'");
+    const csp = index.headers.get('content-security-policy')!;
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain(`connect-src 'self' ws://127.0.0.1:${server.port} ws://localhost:${server.port};`);
+    expect(csp).not.toContain(':*');
+    expect(csp).toContain("base-uri 'none'");
+    expect(csp).toContain("form-action 'none'");
+    expect(csp).toContain("frame-ancestors 'none'");
     expect(index.headers.get('referrer-policy')).toBe('no-referrer');
     expect(index.headers.get('x-content-type-options')).toBe('nosniff');
     expect(await index.text()).toContain('Mapskill');

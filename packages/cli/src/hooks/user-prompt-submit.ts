@@ -36,6 +36,9 @@ export const userPromptSubmit: HookHandler = async (ctx) => {
   if (requests.length === 0) return ALLOW;
   return {
     exitCode: 0,
-    stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: formatRequests(requests) } }),
+    stdout: JSON.stringify({
+      systemMessage: `Mapskill sent ${requests.length} request(s) from the map to Claude.`,
+      hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: formatRequests(requests) },
+    }),
   };
 };

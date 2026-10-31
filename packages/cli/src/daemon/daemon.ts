@@ -260,7 +260,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
       if (!node) throw new HttpError(404, 'no such part');
       if (!node.file) throw new HttpError(400, 'this part has no file to lock');
       const abs = path.join(root, node.file);
-      if (locked) addLocks(root, [abs], node.label);
+      if (locked) addLocks(root, [abs], path.basename(node.file));
       else removeLocks(root, [abs]);
       const answer = locksAnswer();
       server.broadcast({ type: 'locks', ...answer });
@@ -322,8 +322,11 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
         return null;
       }
       const all = text.split('\n').map((l) => l.replace(/\r$/, ''));
-      const last = Math.min(end ?? start + DEFAULT_SOURCE_LINES - 1, start + MAX_SOURCE_LINES - 1, all.length);
-      return { file: rel, start, end: Math.max(start, last), total: all.length, lines: all.slice(start - 1, last) };
+      const total = all.length;
+      if (start > total) return { file: rel, start: total + 1, end: total, total, lines: [] };
+      const wanted = Math.max(start, end ?? start + DEFAULT_SOURCE_LINES - 1);
+      const last = Math.min(wanted, start + MAX_SOURCE_LINES - 1, total);
+      return { file: rel, start, end: last, total, lines: all.slice(start - 1, last) };
     },
     shutdown: () => {
       void stop('shutdown request');

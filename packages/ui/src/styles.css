@@ -99,4 +99,5 @@ button { font: inherit; color: inherit; }
 .pending-list li { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
 .pending-list li span { flex: 1; }
 .credit { margin-left: auto; color: var(--muted); font-size: 0.8em; }
+.app > .error.stale { position: static; transform: none; margin: 8px 16px 0; max-width: none; }
 .app > .error { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); z-index: 10; margin: 0; background: var(--panel); max-width: 90vw; }

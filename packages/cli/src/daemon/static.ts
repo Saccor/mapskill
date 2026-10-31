@@ -15,13 +15,16 @@ const TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
-export const SECURITY_HEADERS: Record<string, string> = {
-  'content-security-policy':
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
-    "connect-src 'self' ws://127.0.0.1:* ws://localhost:*; frame-ancestors 'none'",
-  'referrer-policy': 'no-referrer',
-  'x-content-type-options': 'nosniff',
-};
+/** Headers for every static answer. The WebSocket may only go to this daemon's own port. */
+export function securityHeaders(port: number): Record<string, string> {
+  return {
+    'content-security-policy':
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+      `connect-src 'self' ws://127.0.0.1:${port} ws://localhost:${port}; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
+    'referrer-policy': 'no-referrer',
+    'x-content-type-options': 'nosniff',
+  };
+}
 
 /** True for requests the map view's static files answer: GET/HEAD outside /api/ and /ws. */
 export function isStaticRequest(method: string | undefined, pathname: string): boolean {
@@ -29,7 +32,8 @@ export function isStaticRequest(method: string | undefined, pathname: string): b
 }
 
 /** Answers a static request from `uiDir`. Paths without an extension get index.html (the map is one page). */
-export function serveStatic(uiDir: string | null, req: http.IncomingMessage, res: http.ServerResponse, pathname: string): void {
+export function serveStatic(uiDir: string | null, req: http.IncomingMessage, res: http.ServerResponse, pathname: string, port: number): void {
+  const SECURITY_HEADERS = securityHeaders(port);
   const plain = (status: number, text: string): void => {
     res.writeHead(status, { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' });
     res.end(text);

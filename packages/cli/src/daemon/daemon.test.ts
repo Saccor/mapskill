@@ -259,7 +259,7 @@ describe('startDaemon', () => {
     const node = graph.nodes.find((n) => n.file === 'lib/a.ts')!;
     const locked = await request<Locks>(h.info, 'POST', '/api/locks', { nodeId: node.id, locked: true });
     expect(locked.lockedFiles).toEqual(['lib/a.ts']);
-    expect(locked.locks[0]).toMatchObject({ path: 'lib/a.ts', label: node.label });
+    expect(locked.locks[0]).toMatchObject({ path: 'lib/a.ts', label: 'a.ts' });
     await waitFor(() => client.messages.some((m) => m.type === 'locks'));
     const unlocked = await request<Locks>(h.info, 'POST', '/api/locks', { nodeId: node.id, locked: false });
     expect(unlocked.lockedFiles).toEqual([]);
@@ -314,6 +314,13 @@ describe('startDaemon', () => {
     expect(src).toMatchObject({ file: 'lib/a.ts', start: 2, end: 3 });
     expect(src.lines).toHaveLength(2);
     expect(src.lines[0]).toContain('const total');
+    const total = (await request<{ total: number }>(h.info, 'GET', '/api/source?file=lib/a.ts')).total;
+    expect(await request(h.info, 'GET', `/api/source?file=lib/a.ts&start=${total + 50}&end=${total + 60}`)).toMatchObject({
+      start: total + 1, end: total, total, lines: [],
+    });
+    const backwards = await request<{ start: number; end: number; lines: string[] }>(h.info, 'GET', '/api/source?file=lib/a.ts&start=3&end=1');
+    expect(backwards).toMatchObject({ start: 3, end: 3 });
+    expect(backwards.lines).toHaveLength(1);
     const abs = await request<{ file: string }>(h.info, 'GET', `/api/source?file=${encodeURIComponent(path.join(root, 'lib', 'a.ts'))}`);
     expect(abs.file).toBe('lib/a.ts');
     await expect(request(h.info, 'GET', '/api/source?file=.env')).rejects.toMatchObject({ status: 404 });

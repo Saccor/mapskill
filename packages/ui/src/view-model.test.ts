@@ -1,6 +1,6 @@
 import type { PublicGraph } from '@mapskill/core/client';
 import { describe, expect, it } from 'vitest';
-import { activityLine, unreadableLine, findingsByNode, nextPulseEnd, partFlags, projectHealth, related, visibleEdges } from './view-model';
+import { activityLine, isTextEntry, unreadableLine, findingsByNode, nextPulseEnd, partFlags, projectHealth, related, visibleEdges } from './view-model';
 
 const g: PublicGraph = {
   root: '/p', framework: 'nextjs', fileCount: 3, unreadableFiles: [],
@@ -71,5 +71,16 @@ describe('view model', () => {
 
   it('says there are no changes when the file list is empty', () => {
     expect(activityLine({ at: 0, files: [] }, g, 'en')).toBe('No changes yet.');
+  });
+
+  it('knows which elements take typed text (Escape must leave those alone)', () => {
+    expect(isTextEntry({ tagName: 'TEXTAREA' })).toBe(true);
+    expect(isTextEntry({ tagName: 'INPUT', type: 'text' })).toBe(true);
+    expect(isTextEntry({ tagName: 'INPUT', type: 'search' })).toBe(true);
+    expect(isTextEntry({ tagName: 'INPUT', type: 'number' })).toBe(true);
+    expect(isTextEntry({ tagName: 'DIV', isContentEditable: true })).toBe(true);
+    expect(isTextEntry({ tagName: 'INPUT', type: 'checkbox' })).toBe(false);
+    expect(isTextEntry({ tagName: 'BUTTON' })).toBe(false);
+    expect(isTextEntry({ tagName: 'DIV' })).toBe(false);
   });
 });

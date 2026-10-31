@@ -43,43 +43,40 @@ export class RequestQueue {
       createdAt: this.now(),
       status: 'pending',
     };
-    this.requests.push(request);
-    this.prune();
-    this.save();
+    this.commit(prune([...this.requests, request]));
     return { ...request };
   }
 
   cancel(id: string): boolean {
-    const r = this.requests.find((x) => x.id === id && x.status === 'pending');
-    if (!r) return false;
-    r.status = 'cancelled';
-    this.save();
+    if (!this.requests.some((x) => x.id === id && x.status === 'pending')) return false;
+    this.commit(this.requests.map((x) => (x.id === id ? { ...x, status: 'cancelled' as const } : x)));
     return true;
   }
 
   /** Returns every pending request (oldest first) and marks them sent. */
   claimPending(): MapRequest[] {
-    const pending = this.requests.filter((r) => r.status === 'pending');
-    if (pending.length === 0) return [];
+    if (!this.requests.some((r) => r.status === 'pending')) return [];
     const at = this.now();
-    for (const r of pending) {
-      r.status = 'sent';
-      r.sentAt = at;
-    }
-    this.save();
-    return pending.map((r) => ({ ...r }));
+    const next = this.requests.map((r) => (r.status === 'pending' ? { ...r, status: 'sent' as const, sentAt: at } : r));
+    const before = new Set(this.requests.filter((r) => r.status === 'pending').map((r) => r.id));
+    this.commit(next);
+    return next.filter((r) => before.has(r.id)).map((r) => ({ ...r }));
   }
 
-  private prune(): void {
-    while (this.requests.length > MAX_REQUESTS) {
-      const at = this.requests.findIndex((r) => r.status !== 'pending');
-      if (at < 0) break;
-      this.requests.splice(at, 1);
-    }
-  }
-
-  private save(): void {
+  /** Writes first, then remembers: a failed write leaves the queue in memory as it was. */
+  private commit(next: MapRequest[]): void {
     ensureMapskillDir(this.root);
-    writeJsonAtomic(mapskillPath(this.root, FILE), { version: 1, requests: this.requests });
+    writeJsonAtomic(mapskillPath(this.root, FILE), { version: 1, requests: next });
+    this.requests = next;
   }
+}
+
+function prune(requests: MapRequest[]): MapRequest[] {
+  const out = [...requests];
+  while (out.length > MAX_REQUESTS) {
+    const at = out.findIndex((r) => r.status !== 'pending');
+    if (at < 0) break;
+    out.splice(at, 1);
+  }
+  return out;
 }

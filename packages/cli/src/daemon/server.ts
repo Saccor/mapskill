@@ -155,7 +155,7 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
   async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     if (!allowedHost(req.headers.host)) throw new HttpError(403, 'forbidden host');
     const pathname = (req.url ?? '/').split('?')[0];
-    if (isStaticRequest(req.method, pathname)) return serveStatic(deps.uiDir, req, res, pathname);
+    if (isStaticRequest(req.method, pathname)) return serveStatic(deps.uiDir, req, res, pathname, port);
     if (!sameToken(req.headers['x-mapskill-token'], deps.token)) throw new HttpError(401, 'missing or wrong token');
     deps.activity();
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);

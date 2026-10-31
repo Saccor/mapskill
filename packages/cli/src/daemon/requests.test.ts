@@ -1,8 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { tmpProject } from '@mapskill/core/test-helpers';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MAX_REQUESTS, RequestQueue } from './requests';
+
+const write = vi.hoisted(() => ({ fail: false }));
+vi.mock('./paths', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./paths')>();
+  return {
+    ...actual,
+    writeJsonAtomic: (...args: Parameters<typeof actual.writeJsonAtomic>) => {
+      if (write.fail) throw new Error('disk full');
+      return actual.writeJsonAtomic(...args);
+    },
+  };
+});
 
 const root = (): string => tmpProject({ 'package.json': '{}' });
 
@@ -48,5 +60,25 @@ describe('RequestQueue', () => {
     fs.mkdirSync(path.join(r, '.mapskill'), { recursive: true });
     fs.writeFileSync(path.join(r, '.mapskill', 'requests.json'), '{ nope');
     expect(new RequestQueue(r).list()).toEqual([]);
+  });
+
+  it('leaves memory and file unchanged when a write fails, and passes the error on', () => {
+    const r = root();
+    const q = new RequestQueue(r);
+    const keep = q.add({ kind: 'custom', text: 'keep' });
+    const cancelMe = q.add({ kind: 'custom', text: 'cancel me' });
+    write.fail = true;
+    try {
+      expect(() => q.add({ kind: 'custom', text: 'lost' })).toThrow('disk full');
+      expect(q.list().map((x) => x.id)).toEqual([keep.id, cancelMe.id]);
+      expect(() => q.cancel(cancelMe.id)).toThrow('disk full');
+      expect(q.list().every((x) => x.status === 'pending')).toBe(true);
+      expect(() => q.claimPending()).toThrow('disk full');
+      expect(q.list().every((x) => x.status === 'pending' && x.sentAt === undefined)).toBe(true);
+    } finally {
+      write.fail = false;
+    }
+    expect(q.claimPending().map((x) => x.id)).toEqual([keep.id, cancelMe.id]);
+    expect(new RequestQueue(r).list().every((x) => x.status === 'sent')).toBe(true);
   });
 });

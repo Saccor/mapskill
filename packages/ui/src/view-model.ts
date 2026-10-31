@@ -77,3 +77,12 @@ export function unreadableLine(graph: PublicGraph, lang: Lang): string | null {
   const shown = files.slice(0, 3).join(', ') + (files.length > 3 ? ` +${files.length - 3}` : '');
   return t(lang, 'unreadable', { files: shown });
 }
+
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'email', 'url', 'number', 'tel', 'password']);
+
+/** True for elements where Escape belongs to the typing (text inputs, textareas, contenteditable), not to the map. */
+export function isTextEntry(el: { tagName: string; type?: string; isContentEditable?: boolean }): boolean {
+  if (el.isContentEditable) return true;
+  if (el.tagName === 'TEXTAREA') return true;
+  return el.tagName === 'INPUT' && TEXT_INPUT_TYPES.has((el.type ?? 'text').toLowerCase());
+}

@@ -154,7 +154,8 @@ export function buildGraph(project: Project): Graph {
     degraded,
     shadcn: project.shadcn,
   });
-  const findings = all.filter((f) => project.dismissed[f.id] !== findingCodeHash(f, files));
+  const hasDismissed = Object.keys(project.dismissed).length > 0;
+  const findings = hasDismissed ? all.filter((f) => project.dismissed[f.id] !== findingCodeHash(f, files)) : all;
   return {
     root,
     framework,

@@ -60,7 +60,8 @@ describe('hooks with a daemon', () => {
     const h = await daemon(root);
     await request(h.info, 'POST', '/api/requests', { kind: 'explain', text: 'Explain sumA in plain words' });
     const first = await run('user-prompt-submit', root, { prompt: 'go' });
-    const out = JSON.parse(first.stdout!) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
+    const out = JSON.parse(first.stdout!) as { systemMessage: string; hookSpecificOutput: { hookEventName: string; additionalContext: string } };
+    expect(out.systemMessage).toBe('Mapskill sent 1 request(s) from the map to Claude.');
     expect(out.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
     expect(out.hookSpecificOutput.additionalContext).toContain('1. Explain sumA in plain words');
     expect(await run('user-prompt-submit', root, { prompt: 'again' })).toEqual({ exitCode: 0 });

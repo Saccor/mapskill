@@ -8,6 +8,7 @@ import { SidePanel } from './components/SidePanel';
 import { useMapConnection } from './connection';
 import { pickLang, STRINGS, type Lang } from './i18n';
 import { useSlots } from './slots';
+import { isTextEntry } from './view-model';
 
 const LANG_KEY = 'mapskill-lang';
 const ERROR_MS = 6000;
@@ -24,7 +25,7 @@ function savedLang(): string | null {
 }
 
 function MapApp({ token }: { token: string }) {
-  const { state, api } = useMapConnection(token);
+  const { state, api, stale } = useMapConnection(token);
   const slots = useSlots(state.graph, api, state.status);
   const [lang, setLang] = useState<Lang>(() => pickLang(navigator.language, savedLang()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,26 +55,33 @@ function MapApp({ token }: { token: string }) {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return;
       const target = e.target;
-      if (target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      if (target instanceof HTMLElement && isTextEntry(target)) return;
       setSelectedId(null);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [hasNode]);
   const lastSelected = useRef<string | null>(null);
+  // The selected part vanished from the map (file deleted, project rescanned): nothing is selected any more.
   useEffect(() => {
-    if (selectedId) lastSelected.current = selectedId;
-    else if (lastSelected.current) {
-      const id = lastSelected.current;
-      lastSelected.current = null;
-      // The map re-measures its parts after the panel closes (they are not focusable meanwhile), so retry briefly.
-      let tries = 0;
-      const timer = setInterval(() => {
-        const part = document.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(id)}"]`);
-        part?.focus();
-        if (!part || document.activeElement === part || ++tries >= 20) clearInterval(timer);
-      }, 50);
+    if (state.graph && selectedId && !hasNode) setSelectedId(null);
+  }, [state.graph, selectedId, hasNode]);
+  useEffect(() => {
+    if (selectedId) {
+      lastSelected.current = selectedId;
+      return;
     }
+    if (!lastSelected.current) return;
+    const id = lastSelected.current;
+    lastSelected.current = null;
+    // The map re-measures its parts after the panel closes (they are not focusable meanwhile), so retry briefly.
+    let tries = 0;
+    const timer = setInterval(() => {
+      const part = document.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(id)}"]`);
+      part?.focus();
+      if (!part || document.activeElement === part || ++tries >= 20) clearInterval(timer);
+    }, 50);
+    return () => clearInterval(timer);
   }, [selectedId]);
 
   const toggleLang = (): void => {
@@ -103,6 +111,11 @@ function MapApp({ token }: { token: string }) {
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
+      {stale && (
+        <p className="error stale" role="alert">
+          {STRINGS[lang].staleTab}
+        </p>
+      )}
       {error && (
         <p className="error" role="alert">
           {error.text}

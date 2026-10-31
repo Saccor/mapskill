@@ -1,0 +1,120 @@
+import type { NodeType, Text } from '@mapskill/core/client';
+
+export type Lang = 'en' | 'sv';
+
+const EN = {
+  appTitle: 'Mapskill',
+  connecting: 'Connecting…',
+  reconnecting: 'Reconnecting…',
+  live: 'Live',
+  noToken: 'Open the map with the address Mapskill gave you (mapskill open). It contains a key this page needs.',
+  health: 'Health {score}/10',
+  healthExplained: '{score}/10: {n} finding(s)',
+  healthPerfect: '10/10: no findings',
+  showAllEdges: 'Show all connections',
+  language: 'Svenska',
+  zoneCount: '{n} parts',
+  testsCollapsed: '{n} tests (click to show)',
+  closePanel: 'Close',
+  whatItIs: 'What it is',
+  usedBy: 'Used by',
+  uses: 'Uses',
+  nothing: 'Nothing',
+  findings: 'Questions',
+  noFindings: 'Nothing to ask about here.',
+  fixWithClaude: 'Ask Claude to fix',
+  itsFine: "It's fine",
+  lock: 'Lock',
+  unlock: 'Unlock',
+  locked: 'Locked',
+  ask: 'Ask Claude',
+  askText: 'Explain {name} ({file}) to me in plain English: what it does, who uses it, and whether anything looks wrong.',
+  copy: 'Copy to Claude',
+  copied: 'Copied',
+  code: 'Code',
+  codeLoading: 'Loading code…',
+  codeFailed: 'Could not load the code.',
+  noFile: 'This part has no file of its own.',
+  activityNone: 'No changes yet.',
+  activityLine: '{who} changed {files}',
+  byClaude: 'Claude',
+  byYou: 'Someone',
+  pendingRequests: '{n} waiting: write anything to Claude to send them',
+  cancel: 'Cancel',
+  requestQueued: 'Queued for Claude',
+  lockFailed: 'Could not change the lock: {error}',
+  actionFailed: 'That did not work: {error}',
+  unreadable: 'Could not read: {files}',
+} as const;
+
+export type StringKey = keyof typeof EN;
+
+const SV: Record<StringKey, string> = {
+  appTitle: 'Mapskill',
+  connecting: 'Ansluter…',
+  reconnecting: 'Återansluter…',
+  live: 'Live',
+  noToken: 'Öppna kartan med adressen som Mapskill gav dig (mapskill open). Den innehåller en nyckel som sidan behöver.',
+  health: 'Hälsa {score}/10',
+  healthExplained: '{score}/10: {n} fynd',
+  healthPerfect: '10/10: inga fynd',
+  showAllEdges: 'Visa alla kopplingar',
+  language: 'English',
+  zoneCount: '{n} delar',
+  testsCollapsed: '{n} tester (klicka för att visa)',
+  closePanel: 'Stäng',
+  whatItIs: 'Vad det är',
+  usedBy: 'Används av',
+  uses: 'Använder',
+  nothing: 'Inget',
+  findings: 'Frågor',
+  noFindings: 'Inget att fråga om här.',
+  fixWithClaude: 'Be Claude fixa',
+  itsFine: 'Det är okej',
+  lock: 'Lås',
+  unlock: 'Lås upp',
+  locked: 'Låst',
+  ask: 'Fråga Claude',
+  askText: 'Förklara {name} ({file}) för mig på enkel svenska: vad den gör, vem som använder den, och om något verkar fel.',
+  copy: 'Kopiera till Claude',
+  copied: 'Kopierat',
+  code: 'Kod',
+  codeLoading: 'Hämtar koden…',
+  codeFailed: 'Kunde inte hämta koden.',
+  noFile: 'Den här delen har ingen egen fil.',
+  activityNone: 'Inga ändringar än.',
+  activityLine: '{who} ändrade {files}',
+  byClaude: 'Claude',
+  byYou: 'Någon',
+  pendingRequests: '{n} väntar: skriv något till Claude för att skicka',
+  cancel: 'Avbryt',
+  requestQueued: 'Väntar på Claude',
+  lockFailed: 'Kunde inte ändra låset: {error}',
+  actionFailed: 'Det gick inte: {error}',
+  unreadable: 'Kunde inte läsas: {files}',
+};
+
+export const STRINGS: Record<Lang, Record<StringKey, string>> = { en: EN, sv: SV };
+
+export function pickLang(navigatorLanguage: string | undefined, saved: string | null): Lang {
+  if (saved === 'en' || saved === 'sv') return saved;
+  return navigatorLanguage?.toLowerCase().startsWith('sv') ? 'sv' : 'en';
+}
+
+export function t(lang: Lang, key: StringKey, vars: Record<string, string | number> = {}): string {
+  return STRINGS[lang][key].replace(/\{(\w+)\}/g, (m, name: string) => (name in vars ? String(vars[name]) : m));
+}
+
+export const NODE_TYPE_TEXT: Record<NodeType, { name: Text; about: Text }> = {
+  page: { name: { en: 'Page', sv: 'Sida' }, about: { en: 'A page people can visit in the browser.', sv: 'En sida som man kan besöka i webbläsaren.' } },
+  layout: { name: { en: 'Layout', sv: 'Layout' }, about: { en: 'The frame around the pages below it: header, menu, footer.', sv: 'Ramen runt sidorna under den: sidhuvud, meny, sidfot.' } },
+  'api-route': { name: { en: 'API route', sv: 'API-rutt' }, about: { en: 'An address the app calls to get or save data on the server.', sv: 'En adress som appen anropar för att hämta eller spara data på servern.' } },
+  'server-action': { name: { en: 'Server function', sv: 'Serverfunktion' }, about: { en: 'Code that runs on the server when the page asks for it.', sv: 'Kod som körs på servern när sidan ber om det.' } },
+  component: { name: { en: 'Component', sv: 'Komponent' }, about: { en: 'A building block of the screen that pages reuse.', sv: 'En byggsten på skärmen som sidor återanvänder.' } },
+  helper: { name: { en: 'Helper', sv: 'Hjälpfunktion' }, about: { en: 'A small piece of shared logic, like formatting a date.', sv: 'En liten bit delad logik, till exempel att formatera ett datum.' } },
+  table: { name: { en: 'Table', sv: 'Tabell' }, about: { en: 'A table in the database where the app keeps data.', sv: 'En tabell i databasen där appen sparar data.' } },
+  service: { name: { en: 'Outside service', sv: 'Extern tjänst' }, about: { en: 'A service on the internet the app talks to, like payments or email.', sv: 'En tjänst på internet som appen pratar med, till exempel betalning eller e-post.' } },
+  test: { name: { en: 'Test', sv: 'Test' }, about: { en: 'Code that checks that other code works.', sv: 'Kod som kontrollerar att annan kod fungerar.' } },
+  config: { name: { en: 'Settings', sv: 'Inställningar' }, about: { en: 'Settings for the tools that build and run the app.', sv: 'Inställningar för verktygen som bygger och kör appen.' } },
+  file: { name: { en: 'File', sv: 'Fil' }, about: { en: 'A code file that does not fit the other kinds.', sv: 'En kodfil som inte passar in bland de andra sorterna.' } },
+};

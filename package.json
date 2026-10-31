@@ -7,7 +7,8 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p packages/ui/tsconfig.json --noEmit",
+    "build:ui": "pnpm --filter @mapskill/ui build",
     "scan": "tsx packages/cli/src/bin.ts scan",
     "mapskill": "tsx packages/cli/src/bin.ts",
     "build:plugin": "tsx packages/cli/src/build/bundle.ts plugin/dist"

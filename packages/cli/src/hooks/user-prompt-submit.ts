@@ -1,7 +1,7 @@
 // packages/cli/src/hooks/user-prompt-submit.ts
 import { ensureDaemon, request } from '../daemon/client';
 import { logHookProblem } from './log';
-import { ALLOW, timeLeft, type HookHandler } from './run';
+import { ALLOW, timeLeft, type HookHandler } from './types';
 
 /** Marks the start of a turn, so the Stop hook knows which findings are new. Restarts an idle-stopped daemon. */
 export const userPromptSubmit: HookHandler = async (ctx) => {

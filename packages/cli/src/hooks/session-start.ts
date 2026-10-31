@@ -1,7 +1,7 @@
 // packages/cli/src/hooks/session-start.ts
 import { ensureDaemon } from '../daemon/client';
 import { readLocks, type Lock } from '../locks';
-import { ALLOW, timeLeft, type HookHandler } from './run';
+import { ALLOW, timeLeft, type HookHandler } from './types';
 
 export function sessionContext(running: boolean, locks: Lock[] | null): string {
   const lines = [

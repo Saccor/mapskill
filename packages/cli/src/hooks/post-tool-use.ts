@@ -2,7 +2,7 @@
 import { liveDaemon, request } from '../daemon/client';
 import { editedFile } from './input';
 import { logHookProblem } from './log';
-import { ALLOW, timeLeft, type HookHandler } from './run';
+import { ALLOW, timeLeft, type HookHandler } from './types';
 
 /** Tells the daemon which file Claude just changed (or that a Bash command may have changed files). */
 export const postToolUse: HookHandler = async (ctx) => {

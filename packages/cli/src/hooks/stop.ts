@@ -2,7 +2,7 @@
 import type { StopAnswer } from '@mapskill/core';
 import { liveDaemon, request } from '../daemon/client';
 import { logHookProblem } from './log';
-import { ALLOW, timeLeft, type HookHandler } from './run';
+import { ALLOW, timeLeft, type HookHandler } from './types';
 
 export function formatStopReason(answer: StopAnswer): string {
   const n = answer.total;

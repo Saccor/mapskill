@@ -37,8 +37,9 @@ const MAX_BYTES = 512 * 1024;
 const KEEP_LINES = 2000;
 const DEDUPE_LINES = 200;
 
+/** The usage log. MAPSKILL_HOME comes from `env` when one is given (and only from it), else from process.env. */
 export function usageFile(env: NodeJS.ProcessEnv = process.env): string {
-  const home = env.MAPSKILL_HOME || process.env.MAPSKILL_HOME || path.join(os.homedir(), '.mapskill');
+  const home = env.MAPSKILL_HOME || path.join(os.homedir(), '.mapskill');
   return path.join(home, 'usage.jsonl');
 }
 
@@ -105,13 +106,14 @@ function dayNumber(date: string): number {
   return Math.round(Date.UTC(y, m - 1, d) / 86_400_000);
 }
 
-/** Counts the log. Day 1 is the first event's day; week 1 is days 1-7. Needs at least one line. */
+/** Counts the log. Day 1 is the first event's day (today for an empty log); week 1 is days 1-7. */
 export function summarize(lines: UsageLine[], now: Date): UsageSummary {
+  const today = localDate(now);
   const dates = lines.map((l) => l.d).sort();
-  const firstDay = dates[0];
+  const firstDay = dates[0] ?? today;
   const first = dayNumber(firstDay);
-  const nowDay = dayNumber(localDate(now));
-  const lastDay = Math.max(nowDay, dayNumber(dates[dates.length - 1]));
+  const nowDay = dayNumber(today);
+  const lastDay = Math.max(nowDay, dayNumber(dates[dates.length - 1] ?? today));
   const weekOf = (d: string): number => Math.floor((dayNumber(d) - first) / 7) + 1;
   const daysWith = (pred: (l: UsageLine) => boolean): string[] => [...new Set(lines.filter(pred).map((l) => l.d))];
   const sessionDays = daysWith((l) => l.e === 'session');
@@ -124,7 +126,7 @@ export function summarize(lines: UsageLine[], now: Date): UsageSummary {
   }));
   return {
     firstDay,
-    days: nowDay - first + 1,
+    days: Math.max(1, nowDay - first + 1), // a clock set back must not give day 0 or less
     sessionDays: sessionDays.length,
     mapDays: mapDays.length,
     requests: { ask: count('request-ask'), fix: count('request-fix'), build: count('request-build') },

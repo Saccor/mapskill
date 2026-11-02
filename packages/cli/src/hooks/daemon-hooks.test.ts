@@ -31,7 +31,7 @@ const body = (name: string): string =>
 const project = (): string =>
   canonicalRoot(tmpProject({ 'package.json': '{"dependencies":{"next":"15.0.0"}}', 'lib/a.ts': body('sumA') }));
 const run = (event: string, root: string, input: Record<string, unknown>) =>
-  runHook(event, { stdin: Readable.from([JSON.stringify({ session_id: 's1', cwd: root, ...input })]), env: { CLAUDE_PROJECT_DIR: root } });
+  runHook(event, { stdin: Readable.from([JSON.stringify({ session_id: 's1', cwd: root, ...input })]), env: { MAPSKILL_HOME: process.env.MAPSKILL_HOME, CLAUDE_PROJECT_DIR: root } });
 
 const handles: DaemonHandle[] = [];
 afterEach(async () => {
@@ -48,7 +48,7 @@ describe('hooks with a daemon', () => {
   it('logs a line when a hook skips its request for lack of time', async () => {
     const root = project();
     await daemon(root);
-    const ctx = (input: HookContext['input']): HookContext => ({ input, root, jsProject: true, env: {}, deadline: Date.now() });
+    const ctx = (input: HookContext['input']): HookContext => ({ input, root, jsProject: true, env: { MAPSKILL_HOME: process.env.MAPSKILL_HOME }, deadline: Date.now() });
     const edited = { tool_name: 'Write', tool_input: { file_path: path.join(root, 'lib', 'a.ts') } };
     expect(await userPromptSubmit(ctx({ session_id: 's1' }))).toEqual({ exitCode: 0 });
     expect(await postToolUse(ctx(edited))).toEqual({ exitCode: 0 });

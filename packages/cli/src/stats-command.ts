@@ -5,6 +5,9 @@ import { readUsage, summarize, type UsageLine, type UsageSummary } from './usage
 
 type Lang = 'en' | 'sv';
 
+/** "1 map day", "2 map days": the count with the singular or plural word. */
+const n = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
+
 const TEXT = {
   en: {
     nothing: 'Nothing to show yet: Mapskill has not been used on this computer.',
@@ -12,10 +15,12 @@ const TEXT = {
     since: (s: UsageSummary) => `First used: ${s.firstDay} (day ${s.days})`,
     sessions: (n: number) => `Days with a Claude Code session: ${n}`,
     maps: (n: number) => `Days you opened the map: ${n}`,
-    requests: (r: UsageSummary['requests']) => `Requests from the map: ${r.ask} questions, ${r.fix} fixes, ${r.build} builds`,
+    requests: (r: UsageSummary['requests']) =>
+      `Requests from the map: ${n(r.ask, 'question', 'questions')}, ${n(r.fix, 'fix', 'fixes')}, ${n(r.build, 'build', 'builds')}`,
     reminders: (n: number) => `Reminders Mapskill gave Claude: ${n}`,
     projects: (n: number) => `Projects: ${n}`,
-    week: (w: UsageSummary['weeks'][number]) => `Week ${w.week}: ${w.sessionDays} session days, ${w.mapDays} map days`,
+    week: (w: UsageSummary['weeks'][number]) =>
+      `Week ${w.week}: ${n(w.sessionDays, 'session day', 'session days')}, ${n(w.mapDays, 'map day', 'map days')}`,
     weekTwo: (v: boolean | null) => `Opened the map in week 2: ${v === null ? 'not yet' : v ? 'yes' : 'no'}`,
   },
   sv: {
@@ -24,10 +29,12 @@ const TEXT = {
     since: (s: UsageSummary) => `Första användning: ${s.firstDay} (dag ${s.days})`,
     sessions: (n: number) => `Dagar med en Claude Code-session: ${n}`,
     maps: (n: number) => `Dagar du öppnade kartan: ${n}`,
-    requests: (r: UsageSummary['requests']) => `Förfrågningar från kartan: ${r.ask} frågor, ${r.fix} rättningar, ${r.build} byggen`,
+    requests: (r: UsageSummary['requests']) =>
+      `Förfrågningar från kartan: ${n(r.ask, 'fråga', 'frågor')}, ${n(r.fix, 'rättning', 'rättningar')}, ${n(r.build, 'bygge', 'byggen')}`,
     reminders: (n: number) => `Påminnelser Mapskill gav Claude: ${n}`,
     projects: (n: number) => `Projekt: ${n}`,
-    week: (w: UsageSummary['weeks'][number]) => `Vecka ${w.week}: ${w.sessionDays} sessionsdagar, ${w.mapDays} kartdagar`,
+    week: (w: UsageSummary['weeks'][number]) =>
+      `Vecka ${w.week}: ${n(w.sessionDays, 'sessionsdag', 'sessionsdagar')}, ${n(w.mapDays, 'kartdag', 'kartdagar')}`,
     weekTwo: (v: boolean | null) => `Öppnade kartan under vecka 2: ${v === null ? 'inte än' : v ? 'ja' : 'nej'}`,
   },
 } as const;

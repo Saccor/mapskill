@@ -36,10 +36,24 @@ describe('runStats', () => {
     expect(code).toBe(0);
     expect(out.split('\n')[0]).toContain('Inget har skickats');
     expect(out.split('\n')[0]).toContain('kopiera');
-    expect(out).toContain('Vecka 1: 1 sessionsdagar, 1 kartdagar');
-    expect(out).toContain('Vecka 2: 0 sessionsdagar, 1 kartdagar');
+    expect(out).toContain('Vecka 1: 1 sessionsdag, 1 kartdag');
+    expect(out).toContain('Vecka 2: 0 sessionsdagar, 1 kartdag');
     expect(out).toContain('Öppnade kartan under vecka 2: ja');
-    expect(out).toContain('1 rättningar');
+    expect(out).toContain('0 frågor, 1 rättning, 0 byggen');
+  });
+
+  it('uses singular and plural forms in both languages', async () => {
+    const env = home();
+    for (const n of [1, 2]) recordUsage('session', '/a', { env, now: day(n) });
+    recordUsage('map-open', '/a', { env, now: day(1) });
+    recordUsage('request-ask', '/a', { env, now: day(1) });
+    for (let i = 0; i < 2; i++) recordUsage('request-build', '/a', { env, now: day(1) });
+    const en = (await stats(['--lang', 'en'], env, day(3))).out;
+    expect(en).toContain('Week 1: 2 session days, 1 map day');
+    expect(en).toContain('1 question, 0 fixes, 2 builds');
+    const sv = (await stats(['--lang', 'sv'], env, day(3))).out;
+    expect(sv).toContain('Vecka 1: 2 sessionsdagar, 1 kartdag');
+    expect(sv).toContain('1 fråga, 0 rättningar, 2 byggen');
   });
 
   it('prints an English text, and "not yet" before day 8', async () => {

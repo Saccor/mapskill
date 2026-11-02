@@ -10,7 +10,7 @@ import { editedFile, hookRoot, isJsProject, readHookInput } from './input';
 import { runHook, timeLeft, type HookHandler } from './run';
 
 const stdin = (value: unknown): Readable => Readable.from([typeof value === 'string' ? value : JSON.stringify(value)]);
-const env = (root: string): NodeJS.ProcessEnv => ({ CLAUDE_PROJECT_DIR: root });
+const env = (root: string): NodeJS.ProcessEnv => ({ MAPSKILL_HOME: process.env.MAPSKILL_HOME, CLAUDE_PROJECT_DIR: root });
 const project = (): string => canonicalRoot(tmpProject({ 'package.json': '{}', 'lib/pay/charge.ts': '', 'lib/a.ts': '' }));
 const edit = (root: string, rel: string) => ({
   session_id: 's1',

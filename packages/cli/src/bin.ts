@@ -19,7 +19,7 @@ setSelfEntry(fileURLToPath(import.meta.url));
 const USAGE = [
   'Usage:',
   '  mapskill                 open the map for this folder (run it in your project folder)',
-  '  mapskill stats           show how Mapskill has been used (a text you can send to us) [--lang en|sv] [--json]',
+  '  mapskill stats [--json] [--lang en|sv]   show how Mapskill has been used (a text you can send to us)',
   '  mapskill scan [dir] [--json] [--lang en|sv]',
   '  mapskill status [dir]    start the background daemon if needed and show where it listens',
   '  mapskill stop [dir]      stop the background daemon',

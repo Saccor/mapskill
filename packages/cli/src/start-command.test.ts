@@ -93,6 +93,12 @@ describe('mapskill bin (subprocess)', () => {
     }
   }, 60_000);
 
+  it('keeps the stats flags next to the command, like the other usage lines', () => {
+    const r = bin(['--help']);
+    expect(r.stdout).toMatch(/^ {2}mapskill stats \[--json\] \[--lang en\|sv\] {3}show how Mapskill has been used/m);
+    expect(r.stdout).not.toMatch(/^ {2}mapskill stats {2,}show/m);
+  }, 60_000);
+
   it('still prints usage on stderr and exits 1 for an unknown command', () => {
     const r = bin(['nope']);
     expect(r.status).toBe(1);

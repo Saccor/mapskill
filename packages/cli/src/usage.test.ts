@@ -109,4 +109,23 @@ describe('summarize', () => {
     expect(summarize(lines, day(10)).weekTwoMap).toBe(false);
     expect(summarize([line(1, 'map-open'), line(3, 'map-open'), line(9, 'map-open')], day(10)).weekTwoMap).toBe(true);
   });
+
+  it('survives an empty log', () => {
+    expect(summarize([], day(4))).toMatchObject({ firstDay: '2026-11-04', days: 1, sessionDays: 0, mapDays: 0, projects: 0, weekTwoMap: null });
+  });
+
+  it('never reports fewer than one day when the clock went back', () => {
+    const s = summarize([line(5, 'session')], day(3));
+    expect(s.days).toBe(1);
+    expect(s.weekTwoMap).toBeNull();
+  });
+});
+
+describe('usageFile', () => {
+  it('uses only the env it is given, and process.env when given none', () => {
+    expect(process.env.MAPSKILL_HOME).toBeTruthy(); // vitest.setup.ts
+    expect(usageFile({})).toBe(path.join(os.homedir(), '.mapskill', 'usage.jsonl'));
+    expect(usageFile({ MAPSKILL_HOME: path.join(os.tmpdir(), 'x') })).toBe(path.join(os.tmpdir(), 'x', 'usage.jsonl'));
+    expect(usageFile()).toBe(path.join(process.env.MAPSKILL_HOME!, 'usage.jsonl'));
+  });
 });

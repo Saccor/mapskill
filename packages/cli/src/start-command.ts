@@ -8,17 +8,17 @@ type Lang = 'en' | 'sv';
 const PROJECT_MARKERS = ['package.json', '.git', 'pyproject.toml', 'requirements.txt', 'go.mod'];
 
 /** True when `dir` has a project marker directly inside it. The home folder and disk roots never count. */
-export function looksLikeProject(dir: string): boolean {
+export function looksLikeProject(dir: string, home: string = os.homedir()): boolean {
   const resolved = path.resolve(dir);
   if (path.parse(resolved).root === resolved) return false;
-  if (path.resolve(os.homedir()) === resolved) return false;
+  const same = (a: string, b: string): boolean => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+  if (same(path.resolve(home), resolved)) return false;
   return PROJECT_MARKERS.some((m) => fs.existsSync(path.join(resolved, m)));
 }
 
 export function detectLang(): Lang {
-  const env = process.env.LC_ALL || process.env.LANG || '';
-  if (/^sv/i.test(env)) return 'sv';
-  if (env) return 'en';
+  // Swedish when any of the usual locale variables or the system locale says so.
+  if ([process.env.LC_ALL, process.env.LC_MESSAGES, process.env.LANG].some((v) => /^sv/i.test(v ?? ''))) return 'sv';
   try {
     return Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase().startsWith('sv') ? 'sv' : 'en';
   } catch {

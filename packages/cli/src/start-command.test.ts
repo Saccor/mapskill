@@ -25,6 +25,10 @@ describe('looksLikeProject', () => {
   });
 
   it('never accepts the home folder or a disk root, even with a marker', () => {
+    const home = tmpProject({ 'package.json': '{}' });
+    expect(looksLikeProject(home)).toBe(true);
+    expect(looksLikeProject(home, home)).toBe(false);
+    if (process.platform === 'win32') expect(looksLikeProject(home.toUpperCase(), home)).toBe(false);
     expect(looksLikeProject(os.homedir())).toBe(false);
     expect(looksLikeProject(path.parse(process.cwd()).root)).toBe(false);
   });

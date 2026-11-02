@@ -7,8 +7,8 @@ Testet pågår i två veckor. Använd Claude Code som vanligt, och öppna kartan
 ## 1. Det här behöver du
 
 - **Claude Code**, som du redan använder.
-- **Node.js** version 22 eller nyare. Node.js är programmet som kör Mapskill i bakgrunden.
-  - Kolla om du har det: skriv `node -v` i en terminal. Om det står `v22` eller högre är allt klart.
+- **Node.js** version 22.12 eller nyare. Node.js är programmet som kör Mapskill i bakgrunden.
+  - Kolla om du har det: skriv `node -v` i en terminal. Om det står `v22.12` eller högre (till exempel `v22.14` eller `v24`) är allt klart.
   - Annars laddar du ner "LTS" från [nodejs.org](https://nodejs.org) och installerar som vanligt. LTS betyder den stabila versionen. Starta om Claude Code efteråt.
 - **Ett projekt** att jobba i. Bäst är en Next.js-app, men andra JavaScript- och TypeScript-projekt fungerar också.
 

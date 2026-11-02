@@ -7,8 +7,8 @@ The test runs for two weeks. Use Claude Code as you normally would, and open the
 ## 1. What you need
 
 - **Claude Code**, which you already use.
-- **Node.js** version 22 or newer. Node.js runs Mapskill in the background.
-  - To check, type `node -v` in a terminal. `v22` or higher means you are set.
+- **Node.js** version 22.12 or newer. Node.js runs Mapskill in the background.
+  - To check, type `node -v` in a terminal. `v22.12` or higher (for example `v22.14` or `v24`) means you are set.
   - Otherwise download the "LTS" version from [nodejs.org](https://nodejs.org) and install it. LTS means the stable release. Restart Claude Code afterwards.
 - **A project** to work in. A Next.js app works best, but other JavaScript and TypeScript projects work too.
 

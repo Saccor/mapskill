@@ -16,11 +16,12 @@ export async function waitFor(check: () => boolean, timeoutMs = 5000, stepMs = 2
 
 export interface TestClient {
   messages: ServerMessage[];
+  send(message: unknown): void;
   close(): void;
 }
 
-/** Connects to the daemon's WebSocket, says hello and waits for the first graph message. */
-export async function connect(info: { port: number; token: string }): Promise<TestClient> {
+/** Connects to the daemon's WebSocket, says hello (with `extra` fields) and waits for the first graph message. */
+export async function connect(info: { port: number; token: string }, extra: Record<string, unknown> = {}): Promise<TestClient> {
   const ws = new WebSocket(`ws://127.0.0.1:${info.port}/ws`);
   const messages: ServerMessage[] = [];
   ws.on('message', (data) => messages.push(JSON.parse(String(data)) as ServerMessage));
@@ -28,7 +29,7 @@ export async function connect(info: { port: number; token: string }): Promise<Te
     ws.once('open', () => resolve());
     ws.once('error', reject);
   });
-  ws.send(JSON.stringify({ type: 'hello', token: info.token }));
+  ws.send(JSON.stringify({ type: 'hello', token: info.token, ...extra }));
   await waitFor(() => messages.some((m) => m.type === 'graph'), 30_000);
-  return { messages, close: () => ws.close() };
+  return { messages, send: (m) => ws.send(JSON.stringify(m)), close: () => ws.close() };
 }

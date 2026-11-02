@@ -103,8 +103,11 @@ export type ServerMessage =
   | { type: 'locks'; locks: LockInfo[]; lockedFiles: string[] }
   | { type: 'goal'; status: GoalStatus | null };
 
-/** The only message a client sends: it must be the first one. */
-export type ClientMessage = { type: 'hello'; token: string };
+/**
+ * Messages a client sends. `hello` must be the first one. `seen: true` in hello, or a later `seen` message, says the
+ * user is looking at the map (the tab is visible); only those count as a map view in the usage log.
+ */
+export type ClientMessage = { type: 'hello'; token: string; seen?: boolean } | { type: 'seen' };
 
 export interface DaemonStatus {
   ok: true;

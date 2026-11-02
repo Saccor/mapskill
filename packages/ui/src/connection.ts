@@ -22,6 +22,18 @@ export function isStale(failedReconnects: number): boolean {
   return failedReconnects >= STALE_AFTER_FAILURES;
 }
 
+/** A gate that lets one `seen` message through per `minGapMs`: call it with the time, it says whether to send. */
+export function seenThrottle(minGapMs = 60_000): (now: number) => boolean {
+  let last = -Infinity;
+  return (now) => {
+    if (now - last < minGapMs) return false;
+    last = now;
+    return true;
+  };
+}
+
+const isVisible = (): boolean => document.visibilityState === 'visible';
+
 /** Keeps a WebSocket to the daemon open (with backoff) and turns its messages into map state. */
 export function useMapConnection(token: string): { state: MapState; dispatch: (a: Action) => void; api: Api; stale: boolean } {
   const [state, dispatch] = useReducer(reduce, initialState);
@@ -36,6 +48,8 @@ export function useMapConnection(token: string): { state: MapState; dispatch: (a
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
     const api = apiRef.current!;
+    // The daemon counts a map view only when the user looks at the map: a hello from a visible tab, or `seen` later.
+    const allowSeen = seenThrottle();
     const refreshSideData = (): void => {
       api.locks().then((l) => dispatch({ type: 'locks', locks: l.locks, lockedFiles: l.lockedFiles }), () => {});
       api.requests().then((r) => dispatch({ type: 'requests', requests: r }), () => {});
@@ -46,7 +60,9 @@ export function useMapConnection(token: string): { state: MapState; dispatch: (a
       const ws = new WebSocket(`${scheme}://${location.host}/ws`);
       socketRef.current = ws;
       ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'hello', token }));
+        const seen = isVisible();
+        if (seen) allowSeen(Date.now());
+        ws.send(JSON.stringify({ type: 'hello', token, seen }));
         refreshSideData();
       };
       ws.onmessage = (e) => {
@@ -81,12 +97,22 @@ export function useMapConnection(token: string): { state: MapState; dispatch: (a
       connect();
     };
     connect();
-    const onFocus = (): void => refreshSideData();
+    const reportSeen = (): void => {
+      const ws = socketRef.current;
+      if (!isVisible() || ws?.readyState !== WebSocket.OPEN || !allowSeen(Date.now())) return;
+      ws.send(JSON.stringify({ type: 'seen' }));
+    };
+    const onFocus = (): void => {
+      refreshSideData();
+      reportSeen();
+    };
     window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', reportSeen);
     return () => {
       stopped = true;
       clearTimeout(timer);
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', reportSeen);
       resyncRef.current = null;
       socketRef.current?.close();
     };

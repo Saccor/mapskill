@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { DaemonStatus, Finding, PublicGraph } from '@mapskill/core';
 import { fixture, generateProject, tmpProject } from '@mapskill/core/test-helpers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { WebSocket } from 'ws';
 import { connect, waitFor } from '../test-utils';
 import { readFactsCache } from './cache';
 import { request } from './client';
@@ -290,16 +291,39 @@ describe('startDaemon', () => {
     client.close();
   });
 
-  it('logs map-open after a hello and request-<kind> when a request is queued, to the usage log in env', async () => {
+  it('logs map-open only after a hello with seen: true, and request-<kind> when a request is queued, to the usage log in env', async () => {
     const root = tmpProject(files());
     const env = { MAPSKILL_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-daemon-usage-')) };
     const h = await start(root, { watch: false, env });
-    const client = await connect(h.info);
+    const unseen = await connect(h.info);
+    const old = await connect(h.info, { seen: false });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(readUsage(env)).toEqual([]);
+    unseen.close();
+    old.close();
+    const client = await connect(h.info, { seen: true });
     await waitFor(() => readUsage(env).some((l) => l.e === 'map-open'));
     await request(h.info, 'POST', '/api/requests', { kind: 'build', text: 'Build a thing' });
     await request(h.info, 'POST', '/api/requests', { kind: 'build', text: 'Build another' });
     await request(h.info, 'POST', '/api/requests', { kind: 'explain', text: 'Explain sumA' });
     expect(readUsage(env).map((l) => l.e)).toEqual(['map-open', 'request-build', 'request-build', 'request-ask']);
+    client.close();
+  });
+
+  it('logs map-open for a seen message after hello, and ignores one sent instead of hello', async () => {
+    const root = tmpProject(files());
+    const env = { MAPSKILL_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-daemon-usage-')) };
+    const h = await start(root, { watch: false, env });
+    const early = new WebSocket(`ws://127.0.0.1:${h.info.port}/ws`);
+    await new Promise<void>((resolve) => early.once('open', () => resolve()));
+    early.send(JSON.stringify({ type: 'seen' }));
+    expect(await new Promise<number>((resolve) => early.once('close', (code) => resolve(code)))).toBe(4401);
+    const client = await connect(h.info);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(readUsage(env)).toEqual([]);
+    client.send({ type: 'seen' });
+    await waitFor(() => readUsage(env).some((l) => l.e === 'map-open'));
+    expect(readUsage(env).map((l) => l.e)).toEqual(['map-open']);
     client.close();
   });
 

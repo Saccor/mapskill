@@ -246,12 +246,15 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     graph: graphNow,
     // No missed delta: there is no await between this graph snapshot and the server's clients.add (only microtasks),
     // and deltas are broadcast only from macrotasks. Adding an await here would break that guarantee.
-    hello: async () => {
+    // A map view counts only when the user looks at it: a hello from a visible tab, or a later `seen` message.
+    // A reconnect in a hidden tab (or an old client without `seen`) is not a view.
+    hello: async (seen) => {
       const graph = await graphNow();
       refreshGoal(); // sync: nothing can slip in between this snapshot and the server adding the client
-      recordUsage('map-open', root, { env: options.env });
+      if (seen) recordUsage('map-open', root, { env: options.env });
       return { type: 'graph', seq, graph, goal: goalStatus };
     },
+    seen: () => recordUsage('map-open', root, { env: options.env }),
     touched: async ({ files, sessionId, bash }) => {
       await loaded;
       if (stopping) return;

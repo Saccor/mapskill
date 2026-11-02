@@ -27,6 +27,7 @@ export function fakeDeps(over: Partial<ServerDeps> = {}) {
     status: () => ({ ok: true, root: '/p', pid: process.pid, version: 'test', ready: true, fileCount: 0, clients: 0, seq: 0 }),
     graph: async () => emptyGraph,
     hello: async () => ({ type: 'graph', seq: 0, graph: emptyGraph }),
+    seen: () => {},
     touched: async (input) => {
       calls.touched.push(input);
     },

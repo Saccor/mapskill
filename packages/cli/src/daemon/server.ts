@@ -41,8 +41,10 @@ export interface ServerDeps {
   uiDir: string | null;
   status(): DaemonStatus;
   graph(): Promise<PublicGraph>;
-  /** First message for a client that said hello: the full graph. */
-  hello(): Promise<ServerMessage>;
+  /** First message for a client that said hello: the full graph. `seen` is true when the user is looking at the map. */
+  hello(seen: boolean): Promise<ServerMessage>;
+  /** A client that said hello reports that the user looks at the map again (its tab became visible). */
+  seen(): void;
   touched(input: { files: string[]; toolUseId?: string; sessionId?: string; bash?: boolean }): Promise<void>;
   startTurn(sessionId: string): Promise<string>;
   /**
@@ -337,8 +339,15 @@ export async function startServer(deps: ServerDeps, options: { helloTimeoutMs?: 
           return;
         }
         deps.activity();
-        ws.on('message', () => deps.activity());
-        deps.hello().then(
+        ws.on('message', (later) => {
+          deps.activity();
+          try {
+            if ((JSON.parse(String(later)) as Partial<ClientMessage> | null)?.type === 'seen') deps.seen();
+          } catch {
+            // not JSON: ignored
+          }
+        });
+        deps.hello((msg as { seen?: unknown }).seen === true).then(
           (first) => {
             if (ws.readyState !== WebSocket.OPEN) return;
             ws.send(JSON.stringify(first));

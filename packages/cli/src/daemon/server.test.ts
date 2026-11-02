@@ -147,6 +147,31 @@ describe('WebSocket', () => {
     ws.terminate();
   });
 
+  it('passes hello.seen on and reports seen messages only after a good hello', async () => {
+    const helloSeen: boolean[] = [];
+    let seen = 0;
+    server = await startServer(
+      fakeDeps({
+        hello: async (s) => (helloSeen.push(s), { type: 'graph', seq: 0, graph: emptyGraph }),
+        seen: () => void (seen += 1),
+      }).deps,
+      { helloTimeoutMs: 500 },
+    );
+    const early = new WebSocket(`ws://127.0.0.1:${server.port}/ws`);
+    early.on('open', () => early.send(JSON.stringify({ type: 'seen' })));
+    expect(await closeCode(early)).toBe(4401);
+    const plain = await connect({ port: server.port, token: TOKEN });
+    const looking = await connect({ port: server.port, token: TOKEN }, { seen: true });
+    const odd = await connect({ port: server.port, token: TOKEN }, { seen: 'yes' });
+    expect(helloSeen).toEqual([false, true, false]);
+    plain.send({ type: 'seen' });
+    plain.send({ type: 'nope' });
+    await waitFor(() => seen === 1);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(seen).toBe(1);
+    for (const c of [plain, looking, odd]) c.close();
+  });
+
   it('sends the graph after hello and then broadcasts', async () => {
     server = await startServer(fakeDeps().deps);
     const client = await connect({ port: server.port, token: TOKEN });

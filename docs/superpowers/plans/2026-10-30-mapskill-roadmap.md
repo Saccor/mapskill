@@ -13,7 +13,7 @@ Tidsuppskattning: en erfaren fullstack-utvecklare, ±50 %.
 | M3 | Claude Code-plugin (klar) | 1,5 | [2026-10-31-m3-plugin.md](2026-10-31-m3-plugin.md) | Hooks (SessionStart, UserPromptSubmit, PreToolUse-lås, PostToolUse, Stop), MCP-server med fem verktyg, skill |
 | M4 | Kartvy (klar) | 3 | [2026-10-31-m4-map-view.md](2026-10-31-m4-map-view.md) | React Flow + ELK med stabil layout, sidopanel, aktivitetsrad, pulserande noder, knapparna Lås och Fråga, förfrågningskö |
 | M5 | Mål och spöknoder (klar) | 1,5 | [2026-10-31-m5-goals.md](2026-10-31-m5-goals.md) | YAML-mallar, fyra inbyggda mål, utvärdering, spöknoder, Bygg-knappen |
-| M6 | Härdning och testanvändare | 1,5 | skrivs nu | npm-paketering, plugin-marknadsplatsfil, prestandatest med 500 filer, 3 till 5 testanvändare, mätning av återkomst vecka två |
+| M6 | Härdning och testanvändare (klar för test) | 1,5 | [2026-11-02-m6-ship.md](2026-11-02-m6-ship.md) | npm-paketering, plugin-marknadsplatsfil, prestandatest med 500 filer, lokal mätning av återkomst vecka två. Kvar: publicering och 3 till 5 testanvändare ([releaselistan](../../release-checklist.md)) |
 
 **Tunn demo efter M3** (cirka 5 veckor): skyddsräcket fungerar i Claude Code utan kartvy. Claude stoppas från att ändra låsta filer och påminns om dubbletter innan den avslutar ett varv. Det räcker för att testa kärnhypotesen att återanvändning ökar.
 

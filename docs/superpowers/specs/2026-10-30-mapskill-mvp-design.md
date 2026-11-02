@@ -471,10 +471,10 @@ Mål: punkt 2 till 5 på under 2 sekunder för ett projekt med 500 filer.
 
 ## 7. Integritet och säkerhet
 
-- Ingen nätverkstrafik utöver `127.0.0.1`. Ingen telemetri i MVP.
+- Ingen nätverkstrafik utöver `127.0.0.1`. Ingen telemetri i MVP. Mätningen av återkomst (M6) är en lokal fil, `~/.mapskill/usage.jsonl`, med bara datum, händelse och en kort hash av projektmappen. Testaren läser den med `mapskill stats` och skickar texten själv.
 - Token krävs för all åtkomst till daemonen.
 - Mapskill läser aldrig innehållet i `.env*`-filer, bara variabelnamn som används i koden.
-- Mapskill skriver bara i `.mapskill/` och, en gång, i `.gitignore`.
+- Mapskill skriver bara i `.mapskill/`, i `~/.mapskill/` (mätfilen) och, en gång, i `.gitignore`. Hemmappen och en disks rot kartläggs aldrig.
 - Kodutdrag i UI:t visas endast lokalt.
 
 ---

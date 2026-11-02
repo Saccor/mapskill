@@ -1,12 +1,24 @@
 #!/usr/bin/env node
 import { fileURLToPath } from 'node:url';
-import { setSelfEntry } from './daemon/client';
+
+// Keep this check plain and first: it must run before anything is imported, and parse on old Node versions.
+const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
+if (nodeMajor < 22 || (nodeMajor === 22 && nodeMinor < 12)) {
+  process.stderr.write(
+    `Mapskill needs Node.js 22.12 or newer (you have ${process.versions.node}). Download it from https://nodejs.org
+`,
+  );
+  process.exit(1);
+}
 
 // Each command is imported on demand: hooks must not load @mapskill/core (and with it the TypeScript compiler).
+const { setSelfEntry } = await import('./daemon/client');
 setSelfEntry(fileURLToPath(import.meta.url));
 
 const USAGE = [
   'Usage:',
+  '  mapskill                 open the map for this folder (run it in your project folder)',
+  '  mapskill stats           show how Mapskill has been used (coming soon)',
   '  mapskill scan [dir] [--json] [--lang en|sv]',
   '  mapskill status [dir]    start the background daemon if needed and show where it listens',
   '  mapskill stop [dir]      stop the background daemon',
@@ -34,6 +46,12 @@ function exitAfterFlush(code: number): void {
 const [command, ...rest] = process.argv.slice(2);
 const dir = rest[0] ?? '.';
 const commands: Record<string, () => Promise<number>> = {
+  '--help': async () => (process.stdout.write(USAGE), 0),
+  '-h': async () => (process.stdout.write(USAGE), 0),
+  '--version': async () => (process.stdout.write(`${(await import('./version')).VERSION}
+`), 0),
+  '-v': async () => (process.stdout.write(`${(await import('./version')).VERSION}
+`), 0),
   scan: async () => (await import('./scan')).runScan(rest),
   status: async () => (await import('./commands')).runStatus(dir),
   stop: async () => (await import('./commands')).runStop(dir),
@@ -52,7 +70,13 @@ const commands: Record<string, () => Promise<number>> = {
   },
 };
 
-const run = command !== undefined && Object.hasOwn(commands, command) ? commands[command] : undefined;
+// No command at all (or only flags such as --no-browser) starts the friendly entry point.
+const startFlags = command === undefined || command === '--no-browser';
+const run = startFlags
+  ? async () => (await import('./start-command')).runStart(process.argv.slice(2))
+  : command !== undefined && Object.hasOwn(commands, command)
+    ? commands[command]
+    : undefined;
 if (!run) {
   process.stderr.write(USAGE);
   exitAfterFlush(1);

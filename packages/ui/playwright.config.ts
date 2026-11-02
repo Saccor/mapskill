@@ -7,5 +7,5 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   timeout: 30_000,
-  use: { channel: 'msedge', locale: 'en-US', viewport: { width: 1400, height: 900 } },
+  use: { channel: process.env.MAPSKILL_E2E_CHANNEL ?? 'msedge', locale: 'en-US', viewport: { width: 1400, height: 900 } },
 });

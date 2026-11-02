@@ -1,7 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { tmpProject } from '@mapskill/core/test-helpers';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runStop } from './commands';
 import { mapUrl, runOpen } from './open-command';
+import { UNSAFE_ROOT_MESSAGE } from './unsafe-root';
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -25,4 +28,14 @@ describe('mapskill open', () => {
     expect(await runOpen([root, '--no-browser'], { open: (u) => void quiet.push(u), write: () => {} })).toBe(0);
     expect(quiet).toEqual([]);
   }, 30_000);
+
+  it('refuses the home folder without starting a daemon', async () => {
+    const home = tmpProject({ 'package.json': '{}' });
+    const out: string[] = [];
+    const opened: string[] = [];
+    expect(await runOpen([home], { home, open: (u) => void opened.push(u), write: (s) => void out.push(s) })).toBe(1);
+    expect(out.join('')).toBe(`${UNSAFE_ROOT_MESSAGE}\n`);
+    expect(opened).toEqual([]);
+    expect(fs.existsSync(path.join(home, '.mapskill'))).toBe(false);
+  });
 });

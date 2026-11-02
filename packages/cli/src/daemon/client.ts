@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { DaemonStatus } from '@mapskill/core';
+import { isUnsafeRoot } from '../unsafe-root';
 import { DAEMON_VERSION, isPidAlive, readDaemonInfo, type DaemonInfo } from './info';
 import { ensureMapskillDir, mapskillPath } from './paths';
 
@@ -136,10 +137,11 @@ export function spawnDaemon(root: string, override?: { command: string; args: st
 /** Returns a running daemon for `root`, starting one if needed. Never throws: null means "carry on without Mapskill". */
 export async function ensureDaemon(
   rootArg: string,
-  options: { timeoutMs?: number; spawn?: (root: string) => void } = {},
+  options: { timeoutMs?: number; spawn?: (root: string) => void; home?: string } = {},
 ): Promise<DaemonInfo | null> {
   const root = path.resolve(rootArg);
   try {
+    if (isUnsafeRoot(root, options.home)) return null;
     const existing = await liveDaemon(root);
     if (existing) return existing;
     const old = readDaemonInfo(root);

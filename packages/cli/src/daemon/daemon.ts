@@ -25,6 +25,7 @@ import {
 import { recordUsage } from '../usage';
 import { addLocks, findLock, readLocks, removeLocks } from '../locks';
 import { canonicalRoot, toProjectRel } from '../project-path';
+import { isUnsafeRoot, UNSAFE_ROOT_MESSAGE } from '../unsafe-root';
 import { readFactsCache, writeFactsCache } from './cache';
 import { DAEMON_VERSION, readDaemonInfo, removeDaemonInfo, writeDaemonInfo, type DaemonInfo } from './info';
 import { ensureGitignore, ensureMapskillDir } from './paths';
@@ -61,6 +62,8 @@ export interface DaemonOptions {
   log?: (line: string) => void;
   /** Where MAPSKILL_HOME is read for the usage log. Default process.env. */
   env?: NodeJS.ProcessEnv;
+  /** The home folder, which is never mapped. Default os.homedir(); tests inject one. */
+  home?: string;
 }
 
 export interface DaemonHandle {
@@ -75,6 +78,7 @@ export interface DaemonHandle {
 
 export async function startDaemon(rootArg: string, options: DaemonOptions = {}): Promise<DaemonHandle> {
   const root = canonicalRoot(rootArg);
+  if (isUnsafeRoot(root, options.home)) throw new Error(UNSAFE_ROOT_MESSAGE);
   const log = options.log ?? (() => {});
   const idleMs = options.idleMs ?? 30 * 60_000;
   ensureMapskillDir(root);

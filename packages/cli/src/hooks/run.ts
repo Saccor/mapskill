@@ -39,7 +39,7 @@ const builtIn: Partial<Record<HookEvent, HookHandler>> = {
  */
 export async function runHook(
   event: string,
-  io: { stdin: NodeJS.ReadableStream; env: NodeJS.ProcessEnv },
+  io: { stdin: NodeJS.ReadableStream; env: NodeJS.ProcessEnv; home?: string },
   handlers: Partial<Record<HookEvent, HookHandler>> = builtIn,
 ): Promise<HookResult> {
   if (!isEvent(event)) return { exitCode: 1, stderr: `Unknown hook event: ${event}. Expected one of ${HOOK_EVENTS.join(', ')}.\n` };
@@ -52,7 +52,7 @@ export async function runHook(
   const timedOut = Symbol('timeout');
   try {
     const result = await Promise.race([
-      handler({ input, root, jsProject: isJsProject(root), env: io.env, deadline }),
+      handler({ input, root, jsProject: isJsProject(root, io.home), env: io.env, deadline }),
       new Promise<typeof timedOut>((resolve) => {
         timer = setTimeout(() => resolve(timedOut), Math.max(0, deadline - Date.now()));
       }),

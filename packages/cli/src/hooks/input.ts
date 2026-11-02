@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { canonicalRoot } from '../project-path';
+import { isUnsafeRoot } from '../unsafe-root';
 
 // Hooks must stay light: no runtime import of @mapskill/core anywhere under hooks/ (it loads the TypeScript compiler).
 
@@ -56,8 +57,9 @@ export function hookRoot(input: HookInput, env: NodeJS.ProcessEnv): string {
   return canonicalRoot(dir);
 }
 
-/** True when Mapskill should map this folder: it has a package.json or a tsconfig.json. */
-export function isJsProject(root: string): boolean {
+/** True when Mapskill should map this folder: it has a package.json or a tsconfig.json and is not the home folder or a disk root. */
+export function isJsProject(root: string, home?: string): boolean {
+  if (isUnsafeRoot(root, home)) return false;
   return fs.existsSync(path.join(root, 'package.json')) || fs.existsSync(path.join(root, 'tsconfig.json'));
 }
 

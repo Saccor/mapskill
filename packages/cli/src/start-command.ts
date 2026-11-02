@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { isUnsafeRoot } from './unsafe-root';
 
 type Write = (s: string) => void;
 type Lang = 'en' | 'sv';
@@ -10,9 +11,7 @@ const PROJECT_MARKERS = ['package.json', '.git', 'pyproject.toml', 'requirements
 /** True when `dir` has a project marker directly inside it. The home folder and disk roots never count. */
 export function looksLikeProject(dir: string, home: string = os.homedir()): boolean {
   const resolved = path.resolve(dir);
-  if (path.parse(resolved).root === resolved) return false;
-  const same = (a: string, b: string): boolean => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
-  if (same(path.resolve(home), resolved)) return false;
+  if (isUnsafeRoot(resolved, home)) return false;
   return PROJECT_MARKERS.some((m) => fs.existsSync(path.join(resolved, m)));
 }
 

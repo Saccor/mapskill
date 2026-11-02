@@ -35,6 +35,19 @@ describe('hook input', () => {
     expect(isJsProject(canonicalRoot(tmpProject({ 'notes.txt': '' })))).toBe(false);
   });
 
+  it('never treats the home folder as a project, so session-start does nothing there', async () => {
+    const home = project();
+    expect(isJsProject(home, home)).toBe(false);
+    if (process.platform === 'win32') expect(isJsProject(home.toUpperCase(), home)).toBe(false);
+    const seen: boolean[] = [];
+    const spy: HookHandler = async (ctx) => (seen.push(ctx.jsProject), { exitCode: 0 });
+    await runHook('session-start', { stdin: stdin({}), env: env(home), home }, { 'session-start': spy });
+    expect(seen).toEqual([false]);
+    // The built-in handler: no daemon, no .mapskill folder, no context for Claude.
+    expect(await runHook('session-start', { stdin: stdin({}), env: env(home), home })).toEqual({ exitCode: 0 });
+    expect(fs.existsSync(path.join(home, '.mapskill'))).toBe(false);
+  });
+
   it('finds the edited file in every tool shape', () => {
     expect(editedFile({ tool_input: { file_path: '/a.ts' } })).toBe('/a.ts');
     expect(editedFile({ tool_input: { notebook_path: '/n.ipynb' } })).toBe('/n.ipynb');

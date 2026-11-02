@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { ensureDaemon } from './daemon/client';
+import { isUnsafeRoot, UNSAFE_ROOT_MESSAGE } from './unsafe-root';
 
 type Write = (s: string) => void;
 
@@ -29,13 +30,17 @@ export function openInBrowser(url: string): void {
 /** `mapskill open [dir] [--no-browser]`: starts the daemon if needed, prints the map address and opens it. */
 export async function runOpen(
   argv: string[],
-  deps: { open?: (url: string) => void; write?: Write } = {},
+  deps: { open?: (url: string) => void; write?: Write; home?: string } = {},
 ): Promise<number> {
   const write = deps.write ?? ((s: string) => void process.stdout.write(s));
   const noBrowser = argv.includes('--no-browser');
   const dir = argv.find((a) => !a.startsWith('--')) ?? '.';
   const root = path.resolve(dir);
-  const info = await ensureDaemon(root, { timeoutMs: 10_000 });
+  if (isUnsafeRoot(root, deps.home)) {
+    write(`${UNSAFE_ROOT_MESSAGE}\n`);
+    return 1;
+  }
+  const info = await ensureDaemon(root, { timeoutMs: 10_000, home: deps.home });
   if (!info) {
     write(`Mapskill daemon is not answering. See ${path.join(root, '.mapskill', 'daemon.log')}\n`);
     return 1;

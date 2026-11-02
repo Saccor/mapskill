@@ -155,6 +155,27 @@ describe('version check', () => {
   });
 });
 
+describe('home folder guard', () => {
+  it('ensureDaemon refuses the home folder and spawns nothing', async () => {
+    const home = project();
+    let spawned = 0;
+    expect(await ensureDaemon(home, { home, timeoutMs: 200, spawn: () => void (spawned += 1) })).toBeNull();
+    expect(spawned).toBe(0);
+  });
+
+  it('startDaemon refuses the home folder and writes nothing', async () => {
+    const home = project();
+    await expect(startDaemon(home, { home, watch: false, uiDir: null })).rejects.toThrow(/home folder/);
+    expect(fs.existsSync(path.join(home, '.mapskill'))).toBe(false);
+  });
+
+  it('status refuses a disk root with the plain message', async () => {
+    const out: string[] = [];
+    expect(await runStatus(path.parse(process.cwd()).root, (s) => void out.push(s))).toBe(1);
+    expect(out.join('')).toContain('does not map your home folder or a disk root');
+  });
+});
+
 describe('selfCommand', () => {
   it('uses the registered entry file', () => {
     try {

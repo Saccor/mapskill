@@ -3,6 +3,7 @@ import path from 'node:path';
 import { ensureDaemon, liveDaemon, pingDaemon, request } from './daemon/client';
 import { startDaemon } from './daemon/daemon';
 import { acquireStartLock, isPidAlive, readDaemonInfo, releaseStartLock } from './daemon/info';
+import { isUnsafeRoot, UNSAFE_ROOT_MESSAGE } from './unsafe-root';
 
 type Write = (s: string) => void;
 
@@ -23,6 +24,10 @@ export async function runDaemonCommand(dir: string, write: Write = stderr): Prom
   const root = path.resolve(dir);
   if (!isDirectory(root)) {
     write(`Not a folder: ${root}\n`);
+    return 1;
+  }
+  if (isUnsafeRoot(root)) {
+    write(`${UNSAFE_ROOT_MESSAGE}\n`);
     return 1;
   }
   if (await liveDaemon(root)) {
@@ -58,6 +63,10 @@ export async function runStatus(dir: string, write: Write = stdout): Promise<num
   const root = path.resolve(dir);
   if (!isDirectory(root)) {
     write(`Not a folder: ${root}\n`);
+    return 1;
+  }
+  if (isUnsafeRoot(root)) {
+    write(`${UNSAFE_ROOT_MESSAGE}\n`);
     return 1;
   }
   const info = await ensureDaemon(root, { timeoutMs: 10_000 });

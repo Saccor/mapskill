@@ -66,6 +66,7 @@ describe('release package', () => {
     }
     expect(fs.existsSync(path.join(packageDir, 'dist', 'ui', 'index.html'))).toBe(true);
     expect(fs.existsSync(path.join(packageDir, 'skills'))).toBe(true);
+    expect(fs.readdirSync(path.join(packageDir, 'commands')).sort()).toEqual(['lock.md', 'map.md', 'stats.md', 'unlock.md']);
     expect(fs.readFileSync(path.join(packageDir, 'README.md'), 'utf8').length).toBeGreaterThan(0);
     expect(fs.readFileSync(path.join(packageDir, 'LICENSE'), 'utf8')).toContain('Saccor');
   });
@@ -98,8 +99,8 @@ describe('npm pack and clean install', () => {
     console.log(`mapskill tarball: ${info[0].filename}, ${info[0].size} bytes`);
   });
 
-  it('contains the entry, plugin manifest, hooks and map view', () => {
-    for (const f of ['package/dist/mapskill.mjs', 'package/.claude-plugin/plugin.json', 'package/hooks/hooks.json', 'package/dist/ui/index.html']) {
+  it('contains the entry, plugin manifest, hooks, commands and map view', () => {
+    for (const f of ['package/dist/mapskill.mjs', 'package/.claude-plugin/plugin.json', 'package/hooks/hooks.json', 'package/dist/ui/index.html', 'package/commands/map.md', 'package/commands/lock.md', 'package/commands/unlock.md', 'package/commands/stats.md']) {
       expect(tarballEntries).toContain(f);
     }
   });

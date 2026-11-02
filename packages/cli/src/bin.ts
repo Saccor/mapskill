@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { fileURLToPath } from 'node:url';
+import { COMMAND_NAMES, type CommandName } from './command-names';
 
 // Keep this check plain and first: it must run before anything is imported, and parse on old Node versions.
 const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
@@ -45,7 +46,7 @@ function exitAfterFlush(code: number): void {
 
 const [command, ...rest] = process.argv.slice(2);
 const dir = rest[0] ?? '.';
-const commands: Record<string, () => Promise<number>> = {
+const commands: Record<CommandName, () => Promise<number>> = {
   '--help': async () => (process.stdout.write(USAGE), 0),
   '-h': async () => (process.stdout.write(USAGE), 0),
   '--version': async () => (process.stdout.write(`${(await import('./version')).VERSION}
@@ -75,8 +76,8 @@ const commands: Record<string, () => Promise<number>> = {
 const startFlags = command === undefined || command === '--no-browser';
 const run = startFlags
   ? async () => (await import('./start-command')).runStart(process.argv.slice(2))
-  : command !== undefined && Object.hasOwn(commands, command)
-    ? commands[command]
+  : command !== undefined && (COMMAND_NAMES as readonly string[]).includes(command)
+    ? commands[command as CommandName]
     : undefined;
 if (!run) {
   process.stderr.write(USAGE);

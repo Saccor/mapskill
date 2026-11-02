@@ -16,22 +16,13 @@ Pluginet gör fyra saker:
 - påminner Claude om nya dubbletter och andra säkra fynd innan Claude avslutar sitt svar
 - ger Claude verktygen `map_overview`, `find_similar`, `node_details` och `turn_findings`
 
-## Låsa filer
+## Kommandon
 
-Kommandot `mapskill` finns inte på din PATH när bara pluginet är installerat. Kör det från Mapskill-repot med en absolut sökväg, så fungerar det var som helst:
+Skriv dem i Claude Code:
 
-    pnpm mapskill lock <absolut sökväg>
+- `/mapskill:map` öppnar kartan över projektet i webbläsaren. Claude ger dig också adressen.
+- `/mapskill:lock <fil eller mapp>` låser filen eller mappen, så att Claude måste fråga innan något ändras.
+- `/mapskill:unlock <fil eller mapp>` tar bort låset.
+- `/mapskill:stats` visar hur Mapskill har använts, som en text du kan kopiera till den som bad dig testa. Inget skickas.
 
-Eller kör den paketerade filen inifrån projektmappen, då går en relativ sökväg bra:
-
-    node <sökväg till repot>/plugin/dist/mapskill.mjs lock <sökväg>
-
-Lås tas bort med `unlock` i stället för `lock`, eller genom att du tar bort raden i `.mapskill/locks.json`.
-
-## Kartan
-
-Öppna kartan i webbläsaren från ditt projekt:
-
-    node <sökväg till repot>/plugin/dist/mapskill.mjs open
-
-Claude får också kartans adress när sessionen startar och kan ge dig den.
+Du kan också ta bort ett lås genom att ta bort raden i `.mapskill/locks.json`.

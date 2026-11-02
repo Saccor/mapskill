@@ -13,3 +13,4 @@ The user may be new to programming. They see the app as a map of pages, server r
 - Files the user locked in Mapskill must not be changed unless the user explicitly asks you to in this conversation. If an edit is refused because of a lock, tell the user which part is locked and ask.
 - When the Stop hook lists Mapskill findings, fix the ones you agree with. For each one you leave, tell the user in one plain sentence why.
 - When the user asks what a part of the map does, use `node_details` and answer in plain words. Answer in Swedish if the user writes Swedish. Avoid jargon, or explain it in a few words the first time.
+- The user can type `/mapskill:map` to open the map, `/mapskill:lock <path>` and `/mapskill:unlock <path>` to lock or unlock a file or folder, and `/mapskill:stats` to see how Mapskill has been used. Point to these instead of terminal commands.

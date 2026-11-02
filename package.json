@@ -12,7 +12,9 @@
     "test:e2e": "pnpm build:ui && playwright test -c packages/ui/playwright.config.ts",
     "scan": "tsx packages/cli/src/bin.ts scan",
     "mapskill": "tsx packages/cli/src/bin.ts",
-    "build:plugin": "pnpm build:ui && tsx packages/cli/src/build/bundle.ts plugin/dist"
+    "build:plugin": "pnpm build:ui && tsx packages/cli/src/build/bundle.ts plugin/dist",
+    "build:release": "pnpm build:ui && tsx packages/cli/src/build/release.ts release",
+    "test:release": "vitest run -c vitest.release.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

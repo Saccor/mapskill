@@ -1,7 +1,7 @@
 {
   "name": "mapskill",
-  "version": "0.2.0",
   "description": "A live map of your app for Claude Code: stops Claude from editing what you locked, and reminds it to reuse code instead of copying it.",
+  "author": { "name": "Saccor" },
   "license": "MIT",
   "keywords": ["map", "beginner", "duplicates", "guardrails"]
 }

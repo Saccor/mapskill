@@ -1,0 +1,13 @@
+{
+  "name": "mapskill-marketplace",
+  "owner": { "name": "Saccor" },
+  "description": "Mapskill: a live map of your app for Claude Code",
+  "plugins": [
+    {
+      "name": "mapskill",
+      "source": { "source": "npm", "package": "mapskill" },
+      "description": "A live map of your app for Claude Code: stops Claude from editing what you locked, and reminds it to reuse code instead of copying it.",
+      "category": "development"
+    }
+  ]
+}

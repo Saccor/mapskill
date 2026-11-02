@@ -13,10 +13,21 @@ import { DAEMON_VERSION, isPidAlive, readDaemonInfo, writeDaemonInfo } from './i
 const deadPid = (): number => spawnSync(process.execPath, ['-e', '0']).pid!;
 const project = (): string => tmpProject({ 'package.json': '{}', 'lib/a.ts': 'export const a = 1;\n' });
 const roots: string[] = [];
+/** Roots where a losing daemon process may still be booting when the test ends. */
+const racyRoots = new Set<string>();
 const quiet = (): void => {};
 afterEach(async () => {
-  for (const root of roots.splice(0)) await runStop(root, quiet);
-});
+  for (const root of roots.splice(0)) {
+    await runStop(root, quiet);
+    if (!racyRoots.delete(root)) continue;
+    // The loser of a start race can take over once the winner stops; give it time to show up, then stop it too.
+    const deadline = Date.now() + 4000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      if (readDaemonInfo(root)) await runStop(root, quiet);
+    }
+  }
+}, 20_000);
 function newProject(): string {
   const root = project();
   roots.push(root);
@@ -59,6 +70,7 @@ describe('ensureDaemon', () => {
 
   it('ends up with one daemon when two callers start at once', async () => {
     const root = newProject();
+    racyRoots.add(root);
     const [a, b] = await Promise.all([ensureDaemon(root, { timeoutMs: 15_000 }), ensureDaemon(root, { timeoutMs: 15_000 })]);
     expect(a).not.toBeNull();
     expect(b?.pid).toBe(a!.pid);

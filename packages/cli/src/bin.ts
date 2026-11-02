@@ -18,7 +18,7 @@ setSelfEntry(fileURLToPath(import.meta.url));
 const USAGE = [
   'Usage:',
   '  mapskill                 open the map for this folder (run it in your project folder)',
-  '  mapskill stats           show how Mapskill has been used (coming soon)',
+  '  mapskill stats           show how Mapskill has been used (a text you can send to us) [--lang en|sv] [--json]',
   '  mapskill scan [dir] [--json] [--lang en|sv]',
   '  mapskill status [dir]    start the background daemon if needed and show where it listens',
   '  mapskill stop [dir]      stop the background daemon',
@@ -52,6 +52,7 @@ const commands: Record<string, () => Promise<number>> = {
 `), 0),
   '-v': async () => (process.stdout.write(`${(await import('./version')).VERSION}
 `), 0),
+  stats: async () => (await import('./stats-command')).runStats(rest),
   scan: async () => (await import('./scan')).runScan(rest),
   status: async () => (await import('./commands')).runStatus(dir),
   stop: async () => (await import('./commands')).runStop(dir),

@@ -1,6 +1,7 @@
 // packages/cli/src/hooks/stop.ts
 import type { StopAnswer } from '@mapskill/core';
 import { liveDaemon, request } from '../daemon/client';
+import { recordUsage } from '../usage';
 import { logHookProblem } from './log';
 import { ALLOW, timeLeft, type HookHandler } from './types';
 
@@ -27,5 +28,6 @@ export const stop: HookHandler = async (ctx) => {
   }
   const answer = await request<StopAnswer>(info, 'POST', '/api/stop', { sessionId: input.session_id ?? 'default' }, t);
   if (answer.findings.length === 0) return ALLOW;
+  recordUsage('reminder', root, { env: ctx.env });
   return { exitCode: 0, stdout: JSON.stringify({ decision: 'block', reason: formatStopReason(answer) }) };
 };

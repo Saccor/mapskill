@@ -15,7 +15,7 @@ export function looksLikeProject(dir: string): boolean {
   return PROJECT_MARKERS.some((m) => fs.existsSync(path.join(resolved, m)));
 }
 
-function detectLang(): Lang {
+export function detectLang(): Lang {
   const env = process.env.LC_ALL || process.env.LANG || '';
   if (/^sv/i.test(env)) return 'sv';
   if (env) return 'en';

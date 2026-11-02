@@ -2,6 +2,7 @@
 import { ensureDaemon } from '../daemon/client';
 import { mapUrl } from '../open-command';
 import { readLocks, type Lock } from '../locks';
+import { recordUsage } from '../usage';
 import { ALLOW, timeLeft, type HookHandler } from './types';
 
 export function sessionContext(info: { port: number; token: string } | null, locks: Lock[] | null): string {
@@ -22,6 +23,7 @@ export function sessionContext(info: { port: number; token: string } | null, loc
 export const sessionStart: HookHandler = async (ctx) => {
   const { root, jsProject } = ctx;
   if (!jsProject) return ALLOW;
+  recordUsage('session', root, { env: ctx.env });
   const info = await ensureDaemon(root, { timeoutMs: Math.max(0, Math.min(3000, timeLeft(ctx) - 1500)) });
   const read = readLocks(root);
   const additionalContext = sessionContext(info, read.ok ? read.locks : null);

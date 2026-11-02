@@ -1,5 +1,6 @@
 // packages/cli/src/hooks/daemon-hooks.test.ts
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import type { StopAnswer } from '@mapskill/core';
@@ -9,6 +10,7 @@ import { request } from '../daemon/client';
 import { startDaemon, type DaemonHandle } from '../daemon/daemon';
 import { addLocks } from '../locks';
 import { canonicalRoot } from '../project-path';
+import { readUsage } from '../usage';
 import { postToolUse } from './post-tool-use';
 import { runHook } from './run';
 import type { HookContext } from './types';
@@ -104,6 +106,25 @@ describe('hooks with a daemon', () => {
     expect(await run('stop', root, { stop_hook_active: true })).toEqual({ exitCode: 0 });
     expect(await run('stop', root, { stop_hook_active: false })).toEqual({ exitCode: 0 });
     expect((await request<{ ok: boolean }>(h.info, 'GET', '/api/status')).ok).toBe(true);
+  });
+
+  it('logs session and reminder to the local usage log without changing the answers', async () => {
+    const root = project();
+    await daemon(root);
+    const MAPSKILL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-hook-usage-'));
+    const withHome = (event: string, input: Record<string, unknown>) =>
+      runHook(event, { stdin: Readable.from([JSON.stringify({ session_id: 's1', cwd: root, ...input })]), env: { CLAUDE_PROJECT_DIR: root, MAPSKILL_HOME } });
+    const start = await withHome('session-start', { source: 'startup' });
+    expect(JSON.parse(start.stdout!).hookSpecificOutput.additionalContext).toContain('find_similar');
+    await withHome('user-prompt-submit', { prompt: 'add sums' });
+    fs.writeFileSync(path.join(root, 'lib', 'b.ts'), body('sumB'));
+    await withHome('post-tool-use', { tool_name: 'Write', tool_use_id: 't1', tool_input: { file_path: path.join(root, 'lib', 'b.ts') } });
+    const blocked = await withHome('stop', {});
+    expect(JSON.parse(blocked.stdout!).decision).toBe('block');
+    const events = readUsage({ MAPSKILL_HOME }).map((l) => l.e);
+    expect(events).toEqual(['session', 'reminder']);
+    expect(await withHome('stop', {})).toEqual({ exitCode: 0 });
+    expect(readUsage({ MAPSKILL_HOME })).toHaveLength(2);
   });
 
   it('post-tool-use reports a Bash command without a file list', async () => {

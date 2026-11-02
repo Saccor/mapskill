@@ -9,6 +9,7 @@ import { readFactsCache } from './cache';
 import { request } from './client';
 import { startDaemon, toProjectRel, type DaemonHandle, type DaemonOptions } from './daemon';
 import { readDaemonInfo } from './info';
+import { readUsage } from '../usage';
 
 const drift = vi.hoisted(() => ({ fail: false, calls: 0 }));
 vi.mock('@mapskill/core', async (importOriginal) => {
@@ -286,6 +287,19 @@ describe('startDaemon', () => {
     expect(claimed.requests.map((x) => x.id)).toEqual([r.id]);
     expect((await request<{ requests: unknown[] }>(h.info, 'POST', '/api/requests/claim', {})).requests).toEqual([]);
     expect(fs.existsSync(path.join(root, '.mapskill', 'requests.json'))).toBe(true);
+    client.close();
+  });
+
+  it('logs map-open after a hello and request-<kind> when a request is queued, to the usage log in env', async () => {
+    const root = tmpProject(files());
+    const env = { MAPSKILL_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'mapskill-daemon-usage-')) };
+    const h = await start(root, { watch: false, env });
+    const client = await connect(h.info);
+    await waitFor(() => readUsage(env).some((l) => l.e === 'map-open'));
+    await request(h.info, 'POST', '/api/requests', { kind: 'build', text: 'Build a thing' });
+    await request(h.info, 'POST', '/api/requests', { kind: 'build', text: 'Build another' });
+    await request(h.info, 'POST', '/api/requests', { kind: 'explain', text: 'Explain sumA' });
+    expect(readUsage(env).map((l) => l.e)).toEqual(['map-open', 'request-build', 'request-build', 'request-ask']);
     client.close();
   });
 

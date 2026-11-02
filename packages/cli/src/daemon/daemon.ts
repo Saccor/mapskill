@@ -22,6 +22,7 @@ import {
   type SourceAnswer,
   type StopAnswer,
 } from '@mapskill/core';
+import { recordUsage } from '../usage';
 import { addLocks, findLock, readLocks, removeLocks } from '../locks';
 import { canonicalRoot, toProjectRel } from '../project-path';
 import { readFactsCache, writeFactsCache } from './cache';
@@ -58,6 +59,8 @@ export interface DaemonOptions {
   /** Folder with the built map view. Undefined looks for it; null serves none. */
   uiDir?: string | null;
   log?: (line: string) => void;
+  /** Where MAPSKILL_HOME is read for the usage log. Default process.env. */
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface DaemonHandle {
@@ -242,6 +245,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     hello: async () => {
       const graph = await graphNow();
       refreshGoal(); // sync: nothing can slip in between this snapshot and the server adding the client
+      recordUsage('map-open', root, { env: options.env });
       return { type: 'graph', seq, graph, goal: goalStatus };
     },
     touched: async ({ files, sessionId, bash }) => {
@@ -326,6 +330,7 @@ export async function startDaemon(rootArg: string, options: DaemonOptions = {}):
     requests: async () => requestQueue.list(),
     addRequest: async (input) => {
       const r = requestQueue.add(input);
+      recordUsage(input.kind === 'fix' ? 'request-fix' : input.kind === 'build' ? 'request-build' : 'request-ask', root, { env: options.env });
       pushRequests();
       return r;
     },
